@@ -53,3 +53,12 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# generated files
+*/build/*
+*.native
+*.nrf52840
+
+.vscode
+
+tmp

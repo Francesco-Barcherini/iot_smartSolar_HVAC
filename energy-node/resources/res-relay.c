@@ -11,6 +11,9 @@
 
 #define MAX_POWER 1500.0 // Maximum flow of power in W
 
+// external resources
+void updateChargeRate(float rate);
+
 // Relay states. Destination of Solar Panel energy, souce of home energy.
 enum relay_sp_t { RELAY_SP_HOME, RELAY_SP_BATTERY, RELAY_SP_GRID };
 enum relay_home_t { RELAY_HOME_SP, RELAY_HOME_BATTERY, RELAY_HOME_GRID };
@@ -20,26 +23,27 @@ static relay_home_t relay_home = RELAY_HOME_SP; // Relay state for home
 static float power_sp = 0.0; // Power from solar panel
 static float power_home = 0.0; // Power for home
 
-static void update_relay(bool defected = false)
+void updateBatteryChargeRate()
 {
-    float expected_power = solar_power_prediction();
-    
-    float step;
-    
-    if (defected)
-        step = - 1.5 * MAX_OFFSET_PREDICTION;
-    else
-    {
-        step = (float) random_rand() / (float) RANDOM_RAND_MAX * 2.0;
-        step -= 1.0; // range [-1.0, 1.0]
-        step *=  MAX_OFFSET_PREDICTION;
-    }
+    float rate_battery = 0.0;
+    if (relay_sp == RELAY_SP_BATTERY)
+        rate_battery += power_sp;
+    if (relay_home == RELAY_HOME_BATTERY)
+        rate_battery -= power_home;
+    updateChargeRate(rate_battery); // Update charge rate based on relay states
+}
 
-    gen_power = (gen_power + step < 0.0) ? 0.0 : 
-                (gen_power + step > MAX_POWER) ? MAX_POWER :
-                gen_power + step;
+void update_relay(relay_sp_t new_relay_sp, relay_home_t new_relay_home, float new_power_sp, float new_power_home)
+{
+    relay_sp = new_relay_sp == NULL ? relay_sp : new_relay_sp;
+    relay_home = new_relay_home == NULL ? relay_home : new_relay_home;
+    power_sp = new_power_sp == NULL ? power_sp : new_power_sp;
+    power_home = new_power_home == NULL ? power_home : new_power_home;
 
-    LOG_INFO("Generated power updated: %.2f W (defected: %d)\n", gen_power, defected);
+    updateBatteryChargeRate();
+
+    LOG_INFO("Relay states updated: relay_sp=%d, relay_home=%d, power_sp=%.2f, power_home=%.2f\n",
+             relay_sp, relay_home, power_sp, power_home);
 }
 
 void relay_json_string(char* buffer)
@@ -110,7 +114,6 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
     }
 
     // Check for valid relay states and power values
-    unsigned int result = BAD_REQUEST_4_00;
 
     if (new_power_sp < 0.0 || new_power_sp > MAX_POWER ||
         new_power_home < 0.0 || new_power_home > MAX_POWER)
@@ -149,6 +152,8 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
     power_home = new_power_home == NULL ? power_home : new_power_home;
     LOG_INFO("Relay states updated: relay_sp=%d, relay_home=%d, power_sp=%.2f, power_home=%.2f\n",
              relay_sp, relay_home, power_sp, power_home);
+
+    updateBatteryChargeRate(); // Update charge rate based on relay states
 
     coap_set_status_code(response, CHANGED_2_04);
 }

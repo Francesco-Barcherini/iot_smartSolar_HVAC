@@ -32,7 +32,7 @@ static float out_temperature = (MIN_OUT_TEMPERATURE + MAX_OUT_TEMPERATURE) / 2.0
 static float module_temperature = (MIN_MODULE_TEMPERATURE + MAX_MODULE_TEMPERATURE) / 2.0;
 
 // Callable from outside: expected power prediction
-float solar_power_prediction()
+float solar_power_predict()
 {
     float inputs[NUM_INPUT];
     inputs[0] = out_temperature;

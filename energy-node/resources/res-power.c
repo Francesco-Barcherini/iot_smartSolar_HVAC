@@ -9,16 +9,27 @@
 #define LOG_MODULE "App"
 #define LOG_LEVEL LOG_LEVEL_APP
 
+// extern resources
+enum status_t {STATUS_ON, STATUS_ANTIDUST, STATUS_ALARM};
+extern status_t energyNodeStatus;
+
 // Generated power parameters
 #define MAX_POWER 1500.0 // in W
 #define MAX_OFFSET_PREDICTION 0.2 * MAX_POWER
 
 float gen_power = 0.0; // in W
 
-float solar_power_prediction();
+float solar_power_predict();
 
 static void update_gen_power(bool defected = false)
 {
+    if (energyNodeStatus != STATUS_ON)
+    {
+        gen_power = 0.0;
+        LOG_INFO("Energy Node is not ON, generated power set to 0.0 W\n");
+        return;
+    }
+    
     float expected_power = solar_power_prediction();
     
     float step;

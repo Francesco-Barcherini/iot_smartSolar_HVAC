@@ -9,11 +9,11 @@
 #define LOG_MODULE "App"
 #define LOG_LEVEL LOG_LEVEL_APP
 
-enum antiDust_t {OFF, ON, ALARM};
+enum antiDust_t {ANTIDUST_OFF, ANTIDUST_ON};
 
-static antiDust_sp_t antiDustState = OFF; // AntiDust state for solar panel
+static antiDust_sp_t antiDustState = ANTIDUST_OFF; // AntiDust state for solar panel
 
-static void update_antiDust(antiDust_t newState = OFF)
+void update_antiDust(antiDust_t newState = ANTIDUST_OFF)
 {
     antiDustState = newState == NULL ? antiDustState : newState;
 
@@ -56,17 +56,15 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
 {
     const char *req_antiDust = NULL;
 
-    antiDust_t new_antiDust = OFF;
+    antiDust_t new_antiDust = ANTIDUST_OFF;
 
     coap_get_post_variable(request, "antiDust", &req_antiDust);
 
     if (req_antiDust != NULL) {
         if (strcmp(req_antiDust, "on") == 0) {
-            new_antiDust = ON;
+            new_antiDust = ANTIDUST_ON;
         } else if (strcmp(req_antiDust, "off") == 0) {
-            new_antiDust = OFF;
-        } else if (strcmp(req_antiDust, "alarm") == 0) {
-            new_antiDust = ALARM;
+            new_antiDust = ANTIDUST_OFF;
         } else {
             LOG_ERR("Invalid antiDust state: %s\n", req_antiDust);
             coap_set_status_code(response, BAD_REQUEST_4_00);

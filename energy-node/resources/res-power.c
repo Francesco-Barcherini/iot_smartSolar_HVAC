@@ -21,9 +21,11 @@ extern enum status_t energyNodeStatus;
 
 float gen_power = 0.0; // in W
 
+bool defected = false; // true if the solar panel is defected
+
 float solar_power_predict();
 
-static void update_gen_power(bool defected)
+static void update_gen_power()
 {
     if (energyNodeStatus != STATUS_ON)
     {
@@ -86,7 +88,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 
 static void res_event_handler(void)
 {
-    update_gen_power(false);
+    update_gen_power();
     coap_notify_observers(&res_gen_power);
     
     LOG_DBG("gen_power resource event handler called\n");

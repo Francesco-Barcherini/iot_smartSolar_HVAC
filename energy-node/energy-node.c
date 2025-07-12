@@ -34,6 +34,7 @@ enum antiDust_t {ANTIDUST_OFF, ANTIDUST_ON};
 enum relay_sp_t { RELAY_SP_HOME, RELAY_SP_BATTERY, RELAY_SP_GRID };
 enum relay_home_t { RELAY_HOME_SP, RELAY_HOME_BATTERY, RELAY_HOME_GRID };
 extern float gen_power; // Generated power in W
+extern bool defected; // true if the solar panel is defected
 float solar_power_predict();
 void update_antiDust(enum antiDust_t newState);
 void updateChargeRate(float rate);
@@ -204,21 +205,22 @@ PROCESS_THREAD(energy_node_process, ev, data)
                 etimer_stop(&end_antiDust_timer);
             }
         }
-        // else if (ev == button_hal_periodic_event) {
-        //     button_hal_button_t* btn = (button_hal_button_t*) data;
-        //     if(btn->press_duration_seconds == 2) {
-        //         // Toggle anti-dust mode
-        //         energyNodeStatus = (energyNodeStatus == STATUS_ON) ? STATUS_ANTIDUST : STATUS_ON;
-        //         res_antiDust.trigger();
-        //         LOG_INFO("Toggled anti-dust mode: %s\n", energyNodeStatus == STATUS_ANTIDUST ? "STATUS_ON" : "OFF");
-        //     } 
-        //     else if(btn->press_duration_seconds == 5) {
-        //         // Trigger alarm
-        //         energyNodeStatus = STATUS_ALARM;
-        //         res_relay.trigger();
-        //         LOG_INFO("Alarm triggered!\n");
-        //     }
-        // }
+        else if (ev == button_hal_periodic_event) {
+            button_hal_button_t* btn = (button_hal_button_t*) data;
+            if(btn->press_duration_seconds == 2) {
+                // toggle defected
+                defected = !defected;
+                
+                char mode[16] = defected ? "DUST" : "CLEAN";
+                LOG_INFO("Toggled defected mode: %s\n", mode);
+            } 
+            // else if(btn->press_duration_seconds == 5) {
+            //     // Trigger alarm
+            //     energyNodeStatus = STATUS_ALARM;
+            //     res_relay.trigger();
+            //     LOG_INFO("Alarm triggered!\n");
+            // }
+        }
     }
 
     PROCESS_END();

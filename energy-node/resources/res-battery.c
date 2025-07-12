@@ -21,7 +21,7 @@ static unsigned long lastUpdateTime = 0;
 
 static void update_battery_level()
 {
-    if (lastUpdateTime == 0)
+    if (lastUpdateTime == 0.0)
         lastUpdateTime = clock_seconds();
     unsigned long currentTime = clock_seconds();
     unsigned long elapsedTime = currentTime - lastUpdateTime;

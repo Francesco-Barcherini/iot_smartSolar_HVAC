@@ -5,6 +5,7 @@
 
 #include "contiki.h"
 #include "sys/log.h"
+#include "coap-blocking-api.h"
 
 #include "os/dev/button-hal.h"
 #include "os/dev/leds.h"
@@ -14,6 +15,15 @@
 /* Log configuration */
 #define LOG_MODULE "ENERGY"
 #define LOG_LEVEL LOG_LEVEL_APP
+
+/* COAP energy-node URL */
+#ifdef COOJA
+    #define ENERGY_NODE_EP "coap://[fd00::203:3:3:3]:5683"
+#else /*NRF52840*/
+    #define ENERGY_NODE_EP "coap://[fd00::f6ce:3627:65f2:492f]:5683"
+#endif
+
+#define SETTINGS_URI "settings"
 
 // Publish intervals
 #define LONG_INTERVAL CLOCK_SECOND * 10
@@ -49,6 +59,9 @@ static unsigned int nWrongPredictions = 0; // Counter for wrong predictions
 
 struct etimer blink_timer;
 
+// CoAP observation
+static coap_endpoint_t hvac_node_endpoint;
+
 char* str(float value, char* output)
 {
     int integer = (int) value;
@@ -56,6 +69,26 @@ char* str(float value, char* output)
     int fraction_int = (int)(fraction * 100);
     snprintf(output, 16, "%d.%d", integer, fraction_int);
     return output;
+}
+
+static void send_green_setting()
+{
+    coap_message_t request[1];
+    coap_init_message(request, COAP_TYPE_CON, COAP_POST, 0);
+    coap_set_header_uri_path(request, SETTINGS_URI);
+
+    // Prepare payload
+    char payload[COAP_MAX_CHUNK_SIZE], buf1[16], buf2[16];
+    snprintf(payload, COAP_MAX_CHUNK_SIZE, 
+             "{\"n\":\"settings\",\"pw\":%s,\"status\":%d,\"mode\":%d,\"targetTemp\":%s}",
+             "0.0", "same", MODE_GREEN, "-1.0");
+    coap_set_header_content_format(request, APPLICATION_JSON);
+    
+    coap_set_payload(request, payload, strlen(payload));
+    
+    // Send request
+    COAP_BLOCKING_REQUEST(&hvac_node_endpoint, request, NULL);
+    LOG_DBG("Green mode setting sent: %s\n", payload);
 }
 
 static void alarm_handler()
@@ -72,6 +105,8 @@ static void alarm_handler()
     // relay control
     update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
+
+    send_green_setting(); // Send green mode setting to HVAC node
 }
 
 static void restart()
@@ -108,6 +143,8 @@ static void antidust_handler()
     // relay control
     update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
+
+    send_green_setting(); // Send green mode setting to HVAC node
 }
 
 static void end_antidust_handler()
@@ -187,6 +224,9 @@ PROCESS_THREAD(energy_node_process, ev, data)
     coap_activate_resource(&res_gen_power, "sensors/power");
     coap_activate_resource(&res_relay, "relay");
     coap_activate_resource(&res_antiDust, "antiDust");
+
+    // Initialize CoAP endpoint
+    coap_endpoint_parse(ENERGY_NODE_EP, strlen(ENERGY_NODE_EP), &hvac_node_endpoint);
 
     // Initialize timers
     etimer_set(&weather_battery_timer, LONG_INTERVAL);

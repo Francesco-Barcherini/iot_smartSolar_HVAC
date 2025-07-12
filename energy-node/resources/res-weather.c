@@ -11,7 +11,7 @@
 #define MAX_POWER 1500.0
 
 #include "sys/log.h"
-#define LOG_MODULE "App"
+#define LOG_MODULE "WEATH"
 #define LOG_LEVEL LOG_LEVEL_APP
 
 // Generated weather parameters
@@ -26,6 +26,8 @@
 #define MIN_MODULE_TEMPERATURE 15.0
 #define MAX_MODULE_TEMPERATURE 65.0
 #define MAX_MODULE_TEMP_DIFF 0.5
+
+char* str(float value, char* output);
 
 static float irradiation = (MIN_IRRADIATION + MAX_IRRADIATION) / 2.0;
 static float out_temperature = (MIN_OUT_TEMPERATURE + MAX_OUT_TEMPERATURE) / 2.0;
@@ -51,7 +53,6 @@ float solar_power_predict()
         return MAX_POWER;
     }
     
-    LOG_INFO("Solar power prediction: %.2f W\n", prediction);
     return prediction;
 }
 
@@ -72,16 +73,18 @@ static void update_weather()
     step_module_temp *= MAX_MODULE_TEMP_DIFF;
     module_temperature += step_module_temp;
 
-    LOG_INFO("New weather values: Irradiation=%.2f, Out Temperature=%.2f, Module Temperature=%.2f\n",
-             irradiation, out_temperature, module_temperature);
+    char irradiation_str[16], out_temperature_str[16], module_temperature_str[16];
+    LOG_INFO("New weather values: Irradiation=%s, Out Temperature=%s, Module Temperature=%s\n",
+            str(irradiation, irradiation_str), str(out_temperature, out_temperature_str), str(module_temperature, module_temperature_str));
 }
 
 void weather_json_string(char* buffer)
 {
+    char buf1[16], buf2[16], buf3[16];
     snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE,
-            "{\"n\":\"weather\",\"irr\":%.2f,\"outTemp\":%.2f,\"modTemp\":%.2f}",
-            irradiation, out_temperature, module_temperature);
+            "{\"n\":\"weather\",\"irr\":%s,\"outTemp\":%s,\"modTemp\":%s}",
+            str(irradiation, buf1), str(out_temperature, buf2), str(module_temperature, buf3));
 }
 
 // RESOURCE definition

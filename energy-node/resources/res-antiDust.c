@@ -6,16 +6,16 @@
 #include "random.h"
 
 #include "sys/log.h"
-#define LOG_MODULE "App"
+#define LOG_MODULE "DUST"
 #define LOG_LEVEL LOG_LEVEL_APP
 
 enum antiDust_t {ANTIDUST_OFF, ANTIDUST_ON};
 
-static antiDust_sp_t antiDustState = ANTIDUST_OFF; // AntiDust state for solar panel
+static enum antiDust_t antiDustState = ANTIDUST_OFF; // AntiDust state for solar panel
 
-void update_antiDust(antiDust_t newState = ANTIDUST_OFF)
+void update_antiDust(enum antiDust_t newState)
 {
-    antiDustState = newState == NULL ? antiDustState : newState;
+    antiDustState = newState;
 
     LOG_INFO("AntiDust state updated: %d\n", antiDustState);
 }
@@ -56,7 +56,7 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
 {
     const char *req_antiDust = NULL;
 
-    antiDust_t new_antiDust = ANTIDUST_OFF;
+    enum antiDust_t new_antiDust = ANTIDUST_OFF;
 
     coap_get_post_variable(request, "antiDust", &req_antiDust);
 

@@ -7,18 +7,22 @@
 #include "sys/clock.h"
 
 #include "sys/log.h"
-#define LOG_MODULE "App"
+#define LOG_MODULE "BATT"
 #define LOG_LEVEL LOG_LEVEL_APP
+
+char* str(float value, char* output);
 
 // Battery parameters
 #define BATTERY_CAPACITY 10000 // in Wh
 
 static float battery_level = 5000.0; // in Wh
 static float charge_rate = 0.0; // in W
-static unsigned long lastUpdateTime = clock_seconds();
+static unsigned long lastUpdateTime = 0;
 
 static void update_battery_level()
 {
+    if (lastUpdateTime == 0)
+        lastUpdateTime = clock_seconds();
     unsigned long currentTime = clock_seconds();
     unsigned long elapsedTime = currentTime - lastUpdateTime;
 
@@ -34,7 +38,11 @@ static void update_battery_level()
 
     lastUpdateTime = currentTime;
 
-    LOG_INFO("Battery level updated: %.2f Wh\n", battery_level);
+    if (charge_rate != 0.0)
+    {
+        char level[16];
+        LOG_INFO("Battery level updated: %s Wh\n", str(battery_level, level));
+    }
 }
 
 // callable from outside
@@ -42,15 +50,18 @@ void updateChargeRate(float rate)
 {
     update_battery_level();
     charge_rate = rate;
-    LOG_INFO("Charge rate set to: %.2f W\n", charge_rate);
+
+    char charge_rate_str[16];
+    LOG_INFO("Charge rate set to: %s W\n", str(charge_rate, charge_rate_str));
 }
 
 void battery_json_string(char* buffer)
 {
+    char buf[16];
     snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE, 
-            "{\"n\":\"battery\",\"v\":%.2f}", 
-            battery_level);
+            "{\"n\":\"battery\",\"v\":%s}", 
+            str(battery_level, buf));
 }
 
 // RESOURCE definition
@@ -78,6 +89,9 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 
 static void res_event_handler(void)
 {
+    if (charge_rate == 0.0)
+        return;
+
     update_battery_level();
     coap_notify_observers(&res_battery);
 

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <locale.h>
 
 #include "contiki.h"
 #include "sys/log.h"
@@ -10,15 +11,13 @@
 
 #include "coap-engine.h"
 
-#include "solar-power-model.h" // model weights
-
 /* Log configuration */
-#define LOG_MODULE "App"
+#define LOG_MODULE "ENERGY"
 #define LOG_LEVEL LOG_LEVEL_APP
 
 // Publish intervals
-#define LONG_INTERVAL CLOCK_SECOND * 15
-#define SHORT_INTERVAL CLOCK_SECOND * 1
+#define LONG_INTERVAL CLOCK_SECOND * 10
+#define SHORT_INTERVAL CLOCK_SECOND * 2
 #define ANTIDUST_INTERVAL CLOCK_SECOND * 6
 
 // Power parameters
@@ -28,23 +27,32 @@
 #define WRONG_PREDICTIONS_THRESHOLD_ALARM 10
 
 // Resources
-extern coap_resource_t res_weather, res_battery, res_power, res_relay, res_antiDust;
+extern coap_resource_t res_weather, res_battery, res_gen_power, res_relay, res_antiDust;
 
 //extern variables and functions
 enum antiDust_t {ANTIDUST_OFF, ANTIDUST_ON};
 enum relay_sp_t { RELAY_SP_HOME, RELAY_SP_BATTERY, RELAY_SP_GRID };
 enum relay_home_t { RELAY_HOME_SP, RELAY_HOME_BATTERY, RELAY_HOME_GRID };
 extern float gen_power; // Generated power in W
-float solar_power_prediction();
-void update_antiDust(antiDust_t newState);
+float solar_power_predict();
+void update_antiDust(enum antiDust_t newState);
 void updateChargeRate(float rate);
-void update_relay(relay_sp_t new_relay_sp, relay_home_t new_relay_home, float new_power_sp, float new_power_home);
+void update_relay(enum relay_sp_t new_relay_sp, enum relay_home_t new_relay_home, float new_power_sp, float new_power_home);
 
 // Status
 enum status_t {STATUS_ON, STATUS_ANTIDUST, STATUS_ALARM};
-status_t energyNodeStatus = STATUS_ON;
+enum status_t energyNodeStatus = STATUS_ON;
 
 static unsigned int nWrongPredictions = 0; // Counter for wrong predictions
+
+char* str(float value, char* output)
+{
+    int integer = (int) value;
+    float fraction = value - integer;
+    int fraction_int = (int)(fraction * 100);
+    snprintf(output, 16, "%d.%d", integer, fraction_int);
+    return output;
+}
 
 static void alarm_handler()
 {
@@ -53,12 +61,12 @@ static void alarm_handler()
     update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
     res_antiDust.trigger();
     
-    res_power.trigger();
+    res_gen_power.trigger();
 
     updateChargeRate(0.0); // Stop charging
 
     // relay control
-    update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, NULL);
+    update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
 }
 
@@ -69,12 +77,12 @@ static void antidust_handler()
     update_antiDust(ANTIDUST_ON); // Enable anti-dust mode
     res_antiDust.trigger();
 
-    res_power.trigger();
+    res_gen_power.trigger();
 
     updateChargeRate(0.0); // Stop charging
 
     // relay control
-    update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, NULL);
+    update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
 }
 
@@ -85,12 +93,12 @@ static void end_antidust_handler()
     update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
     res_antiDust.trigger();
 
-    res_power.trigger();
+    res_gen_power.trigger();
 
     updateChargeRate(0.0); // Stop charging
 
     // relay control
-    update_relay(RELAY_SP_GRID, RELAY_HOME_GRID, 0.0, NULL);
+    update_relay(RELAY_SP_GRID, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
 }
 
@@ -102,7 +110,8 @@ static void analyze_prediction(float prediction)
         return; // No change in status
     }
 
-    LOG_WARN("Generated power is low: %.2f W, prediction: %.2f W\n", gen_power, prediction);
+    char gen_power_str[16], prediction_str[16];
+    LOG_WARN("Generated power is low: %s W, prediction: %s W\n", str(gen_power, gen_power_str), str(prediction, prediction_str));
     nWrongPredictions++;
 
     if (nWrongPredictions == WRONG_PREDICTIONS_THRESHOLD_ALARM)
@@ -131,10 +140,18 @@ PROCESS_THREAD(energy_node_process, ev, data)
 
     PROCESS_BEGIN();
 
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    leds_on(LEDS_GREEN); // Indicate energy node is starting
+#endif
+
+    LOG_DBG("Starting energy node\n");
+
+    //setlocale(LC_NUMERIC, "C");
+
     // Initialize resources
     coap_activate_resource(&res_weather, "sensors/weather");
     coap_activate_resource(&res_battery, "sensors/battery");
-    coap_activate_resource(&res_power, "sensors/power");
+    coap_activate_resource(&res_gen_power, "sensors/power");
     coap_activate_resource(&res_relay, "relay");
     coap_activate_resource(&res_antiDust, "antiDust");
 
@@ -145,6 +162,8 @@ PROCESS_THREAD(energy_node_process, ev, data)
 
     while(1) {
         PROCESS_WAIT_EVENT();
+
+        printf("\n");
 
         if (ev == PROCESS_EVENT_TIMER)
         {
@@ -157,7 +176,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
             else if (data == &gen_power_timer) {
                 // Trigger power generation resource
                 if (energyNodeStatus == STATUS_ON)
-                    res_power.trigger();
+                    res_gen_power.trigger();
                 etimer_reset(&gen_power_timer);
             }
             else if (data == &prediction_timer) {
@@ -165,7 +184,8 @@ PROCESS_THREAD(energy_node_process, ev, data)
                 {
                     // Trigger prediction logic
                     float prediction = solar_power_predict();
-                    LOG_DBG("Predicted solar power: %.2f W\n", prediction);
+                    char pred[16];
+                    LOG_INFO("Solar power prediction: %s W\n", str(prediction, pred));
                     analyze_prediction(prediction);
 
                     if (energyNodeStatus == STATUS_ANTIDUST)

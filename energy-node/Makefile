@@ -16,6 +16,9 @@ MODULES_REL += ./resources
 include $(CONTIKI)/Makefile.dir-variables
 MODULES += $(CONTIKI_NG_APP_LAYER_DIR)/coap
 
+# Suppress warning unused-function
+CFLAGS += -Wno-unused-function -Wno-unused-variable
+
 # # Include JSON
 # MODULES += $(CONTIKI_NG_LIB_DIR)/json
 

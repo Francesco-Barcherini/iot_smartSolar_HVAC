@@ -19,6 +19,7 @@
 #define LONG_INTERVAL CLOCK_SECOND * 10
 #define SHORT_INTERVAL CLOCK_SECOND * 2
 #define ANTIDUST_INTERVAL CLOCK_SECOND * 6
+#define BLINK_INTERVAL CLOCK_SECOND * 0.2
 
 // Power parameters
 #define MAX_POWER 1500.0 // in W
@@ -46,6 +47,8 @@ enum status_t energyNodeStatus = STATUS_ON;
 
 static unsigned int nWrongPredictions = 0; // Counter for wrong predictions
 
+struct etimer blink_timer;
+
 char* str(float value, char* output)
 {
     int integer = (int) value;
@@ -71,9 +74,29 @@ static void alarm_handler()
     res_relay.trigger();
 }
 
+static void restart()
+{
+    energyNodeStatus = STATUS_ON;
+
+    update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
+    res_antiDust.trigger();
+    
+    res_gen_power.trigger();
+
+    updateChargeRate(0.0); // Stop charging
+
+    // relay control
+    update_relay(RELAY_SP_GRID, RELAY_HOME_GRID, gen_power, -1.0);
+    res_relay.trigger();
+}
+
 static void antidust_handler()
 {
     energyNodeStatus = STATUS_ANTIDUST;
+
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    etimer_set(&blink_timer, BLINK_INTERVAL);
+#endif
 
     update_antiDust(ANTIDUST_ON); // Enable anti-dust mode
     res_antiDust.trigger();
@@ -91,6 +114,13 @@ static void end_antidust_handler()
 {
     energyNodeStatus = STATUS_ON;
 
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    etimer_stop(&blink_timer);
+    if (defected)
+        leds_single_on(LEDS_YELLOW); // Indicate defected mode
+    else
+        leds_single_off(LEDS_YELLOW); // Turn off yellow LED
+#endif
     update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
     res_antiDust.trigger();
 
@@ -138,6 +168,8 @@ PROCESS_THREAD(energy_node_process, ev, data)
     static struct etimer prediction_timer;
 
     static struct etimer end_antiDust_timer;
+
+    static bool long_press = false;
 
     PROCESS_BEGIN();
 
@@ -204,23 +236,52 @@ PROCESS_THREAD(energy_node_process, ev, data)
                 }
                 etimer_stop(&end_antiDust_timer);
             }
+            else if (data == &blink_timer) {
+                // Blink yellow LED in anti-dust mode
+                if (energyNodeStatus == STATUS_ANTIDUST) {
+                    leds_single_toggle(LEDS_YELLOW);
+                    etimer_reset(&blink_timer);
+                }
+            }
         }
+#if PLATFORM_HAS_BUTTON
+        else if (ev == button_hal_release_event) 
+        {
+            if (long_press)
+            {
+                long_press = false; // Reset long press flag
+                LOG_DBG("Button released after long press\n");
+                continue; // Skip further processing
+            }
+            // toggle defected
+            defected = !defected;
+
+    #if PLATFORM_HAS_LEDS || LEDS_COUNT
+            leds_single_toggle(LEDS_YELLOW);
+    #endif /* PLATFORM_HAS_LEDS || LEDS_COUNT */
+                
+            char mode[16];
+            strcpy(mode, defected ? "DUST" : "CLEAN");
+            LOG_INFO("Toggled defected mode: %s\n", mode);
+        } 
         else if (ev == button_hal_periodic_event) {
             button_hal_button_t* btn = (button_hal_button_t*) data;
-            if(btn->press_duration_seconds == 2) {
-                // toggle defected
-                defected = !defected;
-                
-                char mode[16] = defected ? "DUST" : "CLEAN";
-                LOG_INFO("Toggled defected mode: %s\n", mode);
-            } 
-            // else if(btn->press_duration_seconds == 5) {
-            //     // Trigger alarm
-            //     energyNodeStatus = STATUS_ALARM;
-            //     res_relay.trigger();
-            //     LOG_INFO("Alarm triggered!\n");
-            // }
+            if(btn->press_duration_seconds == 3) 
+            {
+                long_press = true;
+                if (energyNodeStatus == STATUS_ALARM)
+                {
+                    LOG_WARN("Button pressed for 3s: RESTART\n");
+                    restart();
+                }
+                else
+                {
+                    LOG_WARN("Button pressed for 3s: ALARM\n");
+                    alarm_handler();
+                }
+            }
         }
+#endif /* PLATFORM_HAS_BUTTON */
     }
 
     PROCESS_END();

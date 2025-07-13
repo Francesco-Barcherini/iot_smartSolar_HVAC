@@ -27,14 +27,12 @@
 extern float conditioner_power; // Power of the conditioner in W
 extern float outTemp;
 enum status_t {STATUS_OFF, STATUS_VENT, STATUS_COOL, STATUS_HEAT, STATUS_ERROR};
-extern enum status_t status = STATUS_OFF;
+extern enum status_t status;
 
 float roomTemp = 28.0;
 float lastUpdateTime = 0.0;
 
 char* str(float value, char* output);
-
-static float roomTemp = 22.0;
 
 static void update_roomTemp()
 {

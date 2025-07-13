@@ -6,6 +6,7 @@
 #include "contiki.h"
 #include "sys/log.h"
 #include "coap-blocking-api.h"
+#include "coap.h"
 
 #include "os/dev/button-hal.h"
 #include "os/dev/leds.h"
@@ -18,12 +19,12 @@
 
 /* COAP energy-node URL */
 #ifdef COOJA
-    #define ENERGY_NODE_EP "coap://[fd00::203:3:3:3]:5683"
+    #define HVAC_NODE_EP "coap://[fd00::203:3:3:3]:5683"
 #else /*NRF52840*/
-    #define ENERGY_NODE_EP "coap://[fd00::f6ce:3627:65f2:492f]:5683"
+    #define HVAC_NODE_EP "coap://[fd00::f6ce:3627:65f2:492f]:5683"
 #endif
 
-#define SETTINGS_URI "settings"
+#define SETTINGS_URI "/settings"
 
 // Publish intervals
 #define LONG_INTERVAL CLOCK_SECOND * 10
@@ -71,25 +72,11 @@ char* str(float value, char* output)
     return output;
 }
 
-static void send_green_setting()
-{
-    coap_message_t request[1];
-    coap_init_message(request, COAP_TYPE_CON, COAP_POST, 0);
-    coap_set_header_uri_path(request, SETTINGS_URI);
+// Process
+PROCESS(energy_node_process, "Energy Node Process");
+AUTOSTART_PROCESSES(&energy_node_process);
 
-    // Prepare payload
-    char payload[COAP_MAX_CHUNK_SIZE], buf1[16], buf2[16];
-    snprintf(payload, COAP_MAX_CHUNK_SIZE, 
-             "{\"n\":\"settings\",\"pw\":%s,\"status\":%d,\"mode\":%d,\"targetTemp\":%s}",
-             "0.0", "same", MODE_GREEN, "-1.0");
-    coap_set_header_content_format(request, APPLICATION_JSON);
-    
-    coap_set_payload(request, payload, strlen(payload));
-    
-    // Send request
-    COAP_BLOCKING_REQUEST(&hvac_node_endpoint, request, NULL);
-    LOG_DBG("Green mode setting sent: %s\n", payload);
-}
+process_event_t send_green_setting_event;
 
 static void alarm_handler()
 {
@@ -106,7 +93,7 @@ static void alarm_handler()
     update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
 
-    send_green_setting(); // Send green mode setting to HVAC node
+    process_post(&energy_node_process, send_green_setting_event, NULL);
 }
 
 static void restart()
@@ -144,7 +131,7 @@ static void antidust_handler()
     update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
 
-    send_green_setting(); // Send green mode setting to HVAC node
+    process_post(&energy_node_process, send_green_setting_event, NULL);
 }
 
 static void end_antidust_handler()
@@ -194,10 +181,6 @@ static void analyze_prediction(float prediction)
     }
 }
 
-// Process
-PROCESS(energy_node_process, "Energy Node Process");
-AUTOSTART_PROCESSES(&energy_node_process);
-
 PROCESS_THREAD(energy_node_process, ev, data) 
 {
     static struct etimer weather_battery_timer;
@@ -217,6 +200,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
     LOG_DBG("Starting energy node\n");
 
     //setlocale(LC_NUMERIC, "C");
+    send_green_setting_event = process_alloc_event();
 
     // Initialize resources
     coap_activate_resource(&res_weather, "sensors/weather");
@@ -226,7 +210,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
     coap_activate_resource(&res_antiDust, "antiDust");
 
     // Initialize CoAP endpoint
-    coap_endpoint_parse(ENERGY_NODE_EP, strlen(ENERGY_NODE_EP), &hvac_node_endpoint);
+    coap_endpoint_parse(HVAC_NODE_EP, strlen(HVAC_NODE_EP), &hvac_node_endpoint);
 
     // Initialize timers
     etimer_set(&weather_battery_timer, LONG_INTERVAL);
@@ -284,6 +268,27 @@ PROCESS_THREAD(energy_node_process, ev, data)
                 }
             }
         }
+        else if (ev == send_green_setting_event)
+        {
+            coap_message_t request[1];
+            coap_init_message(request, COAP_TYPE_CON, COAP_POST, 0);
+            coap_set_header_uri_path(request, SETTINGS_URI);
+
+            // Prepare payload
+            char payload[COAP_MAX_CHUNK_SIZE], buf1[16], buf2[16];
+            snprintf(payload, COAP_MAX_CHUNK_SIZE, 
+                "pw=%s&status=%s&mode=%s&targetTemp=%s",
+                "0.0", "same", "green", "-1.0");
+            //coap_set_header_content_format(request, TEXT_PLAIN);
+            
+            coap_set_payload(request, (uint8_t *) payload, strlen(payload));
+            
+            // Send request
+            LOG_DBG("Sending green mode: %s\n", payload);
+            COAP_BLOCKING_REQUEST(&hvac_node_endpoint, request, NULL);
+        }
+
+        // Handle button events
 #if PLATFORM_HAS_BUTTON
         else if (ev == button_hal_release_event) 
         {

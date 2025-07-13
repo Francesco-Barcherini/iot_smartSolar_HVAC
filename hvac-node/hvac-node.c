@@ -6,6 +6,7 @@
 #include "contiki.h"
 #include "sys/log.h"
 #include "coap-blocking-api.h"
+#include "coap-observe-client.h"
 
 #include "os/dev/button-hal.h"
 #include "os/dev/leds.h"
@@ -50,9 +51,11 @@ enum cond_mode_t {MODE_NORMAL, MODE_GREEN};
 enum relay_sp_t { RELAY_SP_HOME, RELAY_SP_BATTERY, RELAY_SP_GRID };
 enum relay_home_t { RELAY_HOME_SP, RELAY_HOME_BATTERY, RELAY_HOME_GRID };
 
-extern float conditioner_power = 0.0; // Power of the conditioner in W
-extern enum status_t status = STATUS_OFF;
-extern enum cond_mode_t cond_mode = MODE_NORMAL;
+extern float roomTemp;
+extern float conditioner_power;
+extern enum status_t status;
+extern enum cond_mode_t cond_mode;
+extern float target_temp;
 
 // data from energy node
 float outTemp = 27.5;
@@ -67,6 +70,10 @@ extern coap_resource_t res_roomTemp, res_settings;
 
 // Custom events
 static process_event_t green_start_event;
+
+// Process
+PROCESS(hvac_node_process, "HVAC Node Process");
+AUTOSTART_PROCESSES(&hvac_node_process);
 
 char* str(float value, char* output)
 {
@@ -84,6 +91,9 @@ char* str(float value, char* output)
 //     else
 //         leds_single_off(LEDS_YELLOW); // Turn off yellow LED
 // #endif
+
+void stop_observation_battery();
+void stop_observation_gen_power();
 
 void green_stop()
 {
@@ -138,7 +148,9 @@ void handle_settings(float old_power, enum status_t old_status, enum cond_mode_t
 // CoAP observation
 static coap_endpoint_t energy_node_endpoint;
 
-static coap_observee_t* weather_obs, battery_obs, gen_power_obs;
+static coap_observee_t* weather_obs;
+static coap_observee_t* battery_obs;
+static coap_observee_t* gen_power_obs;
 
 void get_value_from_json(const uint8_t *json, int len)
 {
@@ -167,7 +179,7 @@ void get_value_from_json(const uint8_t *json, int len)
                     float v = atof(value_buf);
 
                     if(strcmp(name_buf, "battery") == 0) {
-                        battery = v;
+                        battery_level = v;
                         LOG_INFO("Battery updated: %s\n", value_buf);
                     } else if(strcmp(name_buf, "gen_power") == 0) {
                         gen_power = v;
@@ -229,8 +241,7 @@ static void notification_callback(coap_observee_t* obs, void* notification, coap
 void start_observation_weather()
 {
     LOG_INFO("Starting weather observation\n");
-    if (weather_obs)
-        coap_obs_remove_observee(weather_obs);
+    coap_obs_remove_observee(weather_obs);
     weather_obs = coap_obs_request_registration(
         &energy_node_endpoint, WEATHER_URI, notification_callback, NULL
     );
@@ -239,8 +250,6 @@ void start_observation_weather()
 void start_observation_battery()
 {
     LOG_INFO("Starting battery observation\n");
-    if (battery_obs)
-        coap_obs_remove_observee(battery_obs);
     battery_obs = coap_obs_request_registration(
         &energy_node_endpoint, BATTERY_URI, notification_callback, NULL
     );
@@ -249,8 +258,6 @@ void start_observation_battery()
 void start_observation_gen_power()
 {
     LOG_INFO("Starting gen power observation\n");
-    if (gen_power_obs)
-        coap_obs_remove_observee(gen_power_obs);
     gen_power_obs = coap_obs_request_registration(
         &energy_node_endpoint, GEN_POWER_URI, notification_callback, NULL
     );
@@ -259,30 +266,20 @@ void start_observation_gen_power()
 void stop_observation_battery()
 {
     LOG_INFO("Stopping battery observation\n");
-    if (battery_obs) {
-        coap_obs_remove_observee(battery_obs);
-        battery_obs = NULL;
-    }
+    coap_obs_remove_observee(battery_obs);
 }
 
 void stop_observation_gen_power()
 {
     LOG_INFO("Stopping gen power observation\n");
-    if (gen_power_obs) {
-        coap_obs_remove_observee(gen_power_obs);
-        gen_power_obs = NULL;
-    }
+    coap_obs_remove_observee(gen_power_obs);
 }
-
-// Process
-PROCESS(hvac_node_process, "HVAC Node Process");
-AUTOSTART_PROCESSES(&hvac_node_process);
 
 PROCESS_THREAD(hvac_node_process, ev, data) 
 {
     static struct etimer rootTemp_timer;
 
-    static bool long_press = false;
+    //static bool long_press;
 
     PROCESS_BEGIN();
 
@@ -305,9 +302,6 @@ PROCESS_THREAD(hvac_node_process, ev, data)
     green_start_event = process_alloc_event();
 
     // Initialize observations
-    weather_obs = NULL;
-    battery_obs = NULL;
-    gen_power_obs = NULL;
     start_observation_weather();
 
     // Initialize timers
@@ -325,13 +319,13 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 res_roomTemp.trigger();
                 etimer_reset(&rootTemp_timer);
             }
-            else if (data == &blink_timer) {
-                // Blink yellow LED in anti-dust mode
-                // if (energyNodeStatus == STATUS_ANTIDUST) {
-                //     leds_single_toggle(LEDS_YELLOW);
-                //     etimer_reset(&blink_timer);
-                // }
-            }
+            // else if (data == &blink_timer) {
+            //     Blink yellow LED in anti-dust mode
+            //     if (energyNodeStatus == STATUS_ANTIDUST) {
+            //         leds_single_toggle(LEDS_YELLOW);
+            //         etimer_reset(&blink_timer);
+            //     }
+            // }
             else if (data == &green_timer) {
                 if (status == STATUS_OFF || status == STATUS_ERROR || 
                     cond_mode != MODE_GREEN) {
@@ -436,7 +430,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
             if(btn->press_duration_seconds == 3) 
             {
                 LOG_DBG("Button pressed for 3 seconds, toggling ERROR status.\n");
-                long_press = true;
+                //long_press = true;
                 // toggle ERROR status
                 if (status == STATUS_ERROR) {
                     conditioner_power = 0.0; // Reset power

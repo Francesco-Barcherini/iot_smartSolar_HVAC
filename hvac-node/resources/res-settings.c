@@ -14,15 +14,14 @@
 #define MAX_POWER 1000.0 // W
 
 // external resources
+enum status_t {STATUS_OFF, STATUS_VENT, STATUS_COOL, STATUS_HEAT, STATUS_ERROR};
+enum cond_mode_t {MODE_NORMAL, MODE_GREEN};
 char* str(float value, char* output);
 void handle_settings(float old_power, enum status_t old_status, enum cond_mode_t old_mode, float old_target_temp);
 
-enum status_t {STATUS_OFF, STATUS_VENT, STATUS_COOL, STATUS_HEAT, STATUS_ERROR};
-enum cond_mode_t {MODE_NORMAL, MODE_GREEN};
-
 float conditioner_power = 0.0; // Power of the conditioner in W
 enum status_t status = STATUS_OFF;
-enum cond_mode_t cond_mode = MODE_NORMAL;
+enum cond_mode_t cond_mode = MODE_GREEN;
 float target_temp = 27.5;
 
 // void update_settings(float new_power, enum status_t new_status, enum cond_mode_t new_mode)
@@ -76,18 +75,42 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 
 static void res_post_put_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
 {
-    const char *req_pw = NULL, *req_status = NULL, *req_mode = NULL;
-    const char *req_target_temp = NULL;
+    LOG_DBG("Received POST request for settings!\n");
+    const char *buffer_var = NULL;
+    char req_pw[16], req_status[16], req_mode[16];
+    char req_target_temp[16];
 
     float new_power = conditioner_power;
     enum status_t new_status = status;
     enum cond_mode_t new_mode = cond_mode;
     float new_target_temp = -1.0; // -1.0 means no change
 
-    coap_get_post_variable(request, "pw", &req_pw);
-    coap_get_post_variable(request, "status", &req_status);
-    coap_get_post_variable(request, "mode", &req_mode);
-    coap_get_post_variable(request, "targetTemp", &req_target_temp);
+    int len;
+
+    len = coap_get_post_variable(request, "pw", &buffer_var);
+    if (len > 0 && len < 15)
+    {
+        memcpy(req_pw, buffer_var, len);
+        req_pw[len] = '\0'; // Null-terminate the string
+    }
+    len = coap_get_post_variable(request, "status", &buffer_var);
+    if (len > 0 && len < 15)
+    {
+        memcpy(req_status, buffer_var, len);
+        req_status[len] = '\0'; // Null-terminate the string
+    }
+    len = coap_get_post_variable(request, "mode", &buffer_var);
+    if (len > 0 && len < 15)
+    {
+        memcpy(req_mode, buffer_var, len);
+        req_mode[len] = '\0'; // Null-terminate the string
+    }
+    len = coap_get_post_variable(request, "targetTemp", &buffer_var);
+    if (len > 0 && len < 15)
+    {
+        memcpy(req_target_temp, buffer_var, len);
+        req_target_temp[len] = '\0'; // Null-terminate the string
+    }
 
     if (req_pw != NULL) {
         new_power = atof(req_pw);
@@ -135,7 +158,7 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
 
     if (req_target_temp != NULL) {
         new_target_temp = atof(req_target_temp);
-        if (new_target != -1.0 && (new_target_temp < 16.0 || new_target_temp > 35.0)) {
+        if (new_target_temp != -1.0 && (new_target_temp < 16.0 || new_target_temp > 35.0)) {
             LOG_ERR("Invalid target temperature: %s\n", req_target_temp);
             coap_set_status_code(response, BAD_REQUEST_4_00);
             return;

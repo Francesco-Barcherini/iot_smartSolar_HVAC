@@ -1,0 +1,38 @@
+# IP addresses
+
+COAP_PORT = 5683
+
+## COOJA
+COOJA_BORDER_ROUTER_IP = 'fd00::201:1:1:1'
+COOJA_ENERGY_IP = 'fd00::202:2:2:2'
+COOJA_HVAC_IP = 'fd00::203:3:3:3'
+
+# NRF52840 DONGLE
+DONGLE_BORDER_ROUTER_IP = 'fd00::f6ce:3691:b9bf:4d7c'
+DONGLE_ENERGY_IP = 'fd00::f6ce:3640:d05a:3662'
+DONGLE_HVAC_IP = 'fd00::f6ce:3627:65f2:492f'
+
+# SERVICE URLS
+WEATHER_URL = '/sensors/weather'
+BATTERY_URL = '/sensors/battery'
+GEN_POWER_URL = '/sensors/power'
+RELAY_URL = '/relay'
+ANTI_DUST_URL = '/antiDust'
+
+ROOM_TEMP_URL = '/sensors/roomTemp'
+SETTINGS_URL = '/settings'
+
+# DB CONFIG
+DB_HOST = 'localhost'
+DB_USER = 'root'
+DB_PASSWORD = 'root'
+DB_NAME = 'HVAC'
+
+# MQTT CONFIG
+MQTT_BROKER_IP = 'localhost'
+MQTT_BROKER_PORT = 1883
+MQTT_KEEPALIVE = 60
+
+# HTTP CONFIG
+HTTP_HOST = 'localhost'
+HTTP_PORT = 8080

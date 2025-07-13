@@ -463,21 +463,21 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                                 }
                                 else // not enough in any case
                                 {
-                                    LOG_WARN("Not enough power for green mode, stopping the hvac.\n");
-                                    status = STATUS_OFF;
-                                    handle_stop();
-                                    res_settings.trigger();
-                                    continue;
+                                    snprintf(payload, // Ask vent power to energy node
+                                        COAP_MAX_CHUNK_SIZE,
+                                        "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
+                                        (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(0.0, buf), str(0.0, buf2));
+                                        conditioner_power = 0.0;
                                 }
                             }
                         }
                         else // not enough in any case
                         {
-                            LOG_WARN("Not enough power for green mode, stopping the hvac.\n");
-                            status = STATUS_OFF;
-                            handle_stop();
-                            res_settings.trigger();
-                            continue;
+                            snprintf(payload, // Ask vent power to energy node
+                                COAP_MAX_CHUNK_SIZE,
+                                "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
+                                (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(0.0, buf), str(0.0, buf2));
+                                conditioner_power = 0.0;
                         }
                     }
                 }
@@ -492,7 +492,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 // Reset the timer for the next green mode check
                 etimer_reset(&green_timer);
 
-                // TODO: Trigger the new settings?
+                res_settings.trigger(); // Trigger settings resource update
             }
         }
         // Handle green mode

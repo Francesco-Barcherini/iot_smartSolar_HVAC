@@ -9,7 +9,7 @@
 #define LOG_MODULE "DUST"
 #define LOG_LEVEL LOG_LEVEL_APP
 
-enum antiDust_t {ANTIDUST_OFF, ANTIDUST_ON};
+enum antiDust_t {ANTIDUST_OFF, ANTIDUST_ON, ANTIDUST_ALARM};
 
 static enum antiDust_t antiDustState = ANTIDUST_OFF; // AntiDust state for solar panel
 

@@ -42,7 +42,7 @@
 extern coap_resource_t res_weather, res_battery, res_gen_power, res_relay, res_antiDust;
 
 //extern variables and functions
-enum antiDust_t {ANTIDUST_OFF, ANTIDUST_ON};
+enum antiDust_t {ANTIDUST_OFF, ANTIDUST_ON, ANTIDUST_ALARM};
 enum relay_sp_t { RELAY_SP_HOME, RELAY_SP_BATTERY, RELAY_SP_GRID };
 enum relay_home_t { RELAY_HOME_SP, RELAY_HOME_BATTERY, RELAY_HOME_GRID };
 extern float gen_power; // Generated power in W
@@ -82,7 +82,7 @@ static void alarm_handler()
 {
     energyNodeStatus = STATUS_ALARM;
 
-    update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
+    update_antiDust(ANTIDUST_ALARM); // Disable anti-dust mode
     res_antiDust.trigger();
     
     res_gen_power.trigger();

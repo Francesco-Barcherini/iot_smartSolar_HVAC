@@ -60,7 +60,7 @@ void battery_json_string(char* buffer)
     char buf[16];
     snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE, 
-            "{\"n\":\"battery\",\"v\":%s}", 
+            "{\"n\":\"battery\",\"v\":\"%s\"}", 
             str(battery_level, buf));
 }
 
@@ -85,13 +85,17 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
     coap_set_payload(response, buffer, strlen((char *)buffer));
 
     LOG_DBG("Battery resource GET handler called\n");
+
+    char buf[16];
+    LOG_DBG("Battery level: %s Wh\n", str(battery_level, buf));
 }
 
 static void res_event_handler(void)
 {
-    if (charge_rate == 0.0)
-        return;
-
+    // TODO: avoid to send when did not change (but send when starting observing)
+    // if (charge_rate == 0.0)
+    // return;  
+    
     update_battery_level();
     coap_notify_observers(&res_battery);
 

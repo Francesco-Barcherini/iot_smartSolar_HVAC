@@ -83,18 +83,46 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 
 static void res_post_put_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
 {
-    const char *req_relay_sp = NULL, *req_relay_home = NULL;
-    const char *req_power_sp = NULL, *req_power_home = NULL;
+    const char *buffer_var = NULL;
+    char req_relay_sp[16], req_relay_home[16];
+    char req_power_sp[16], req_power_home[16];
 
     enum relay_sp_t new_relay_sp = relay_sp;
     enum relay_home_t new_relay_home = relay_home;
     float new_power_sp = power_sp;
     float new_power_home = power_home;
 
-    coap_get_post_variable(request, "relay_sp", &req_relay_sp);
-    coap_get_post_variable(request, "relay_home", &req_relay_home);
-    coap_get_post_variable(request, "power_sp", &req_power_sp);
-    coap_get_post_variable(request, "power_home", &req_power_home);
+    int len;
+
+    // log the payload
+    char pay[COAP_MAX_CHUNK_SIZE];
+    LOG_DBG("Received payload: %.*s\n", 
+                coap_get_payload(request, (const uint8_t **)&pay), pay);
+
+    len = coap_get_post_variable(request, "r_sp", &buffer_var);
+    if (len > 0 && len < 15)
+    {
+        memcpy(req_relay_sp, buffer_var, len);
+        req_relay_sp[len] = '\0'; // Null-terminate the string
+    }
+    len = coap_get_post_variable(request, "r_h", &buffer_var);
+    if (len > 0 && len < 15)
+    {
+        memcpy(req_relay_home, buffer_var, len);
+        req_relay_home[len] = '\0'; // Null-terminate the string
+    }
+    len = coap_get_post_variable(request, "p_sp", &buffer_var);
+    if (len > 0 && len < 15)
+    {
+        memcpy(req_power_sp, buffer_var, len);
+        req_power_sp[len] = '\0'; // Null-terminate the string
+    }
+    len = coap_get_post_variable(request, "p_h", &buffer_var);
+    if (len > 0 && len < 15)
+    {
+        memcpy(req_power_home, buffer_var, len);
+        req_power_home[len] = '\0'; // Null-terminate the string
+    }
 
     if (req_relay_sp != NULL) {
         new_relay_sp = (enum relay_sp_t) atoi(req_relay_sp);
@@ -138,8 +166,8 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
     }
     else 
     {
-        if (new_relay_home == RELAY_HOME_SP
-            || (int) new_relay_home == (int) new_relay_sp)
+        if (new_relay_home == RELAY_HOME_SP)
+            //|| (int) new_relay_home == (int) new_relay_sp)
         {
             LOG_ERR("Invalid relay state: new_relay_sp=%d, new_relay_home=%d\n", 
                      new_relay_sp, new_relay_home);

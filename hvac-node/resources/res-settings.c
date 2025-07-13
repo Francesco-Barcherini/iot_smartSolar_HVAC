@@ -21,7 +21,7 @@ void handle_settings(float old_power, enum status_t old_status, enum cond_mode_t
 
 float conditioner_power = 0.0; // Power of the conditioner in W
 enum status_t status = STATUS_OFF;
-enum cond_mode_t cond_mode = MODE_GREEN;
+enum cond_mode_t cond_mode = MODE_NORMAL;
 float target_temp = 27.5;
 
 // void update_settings(float new_power, enum status_t new_status, enum cond_mode_t new_mode)

@@ -5,7 +5,7 @@
 
 #include "contiki.h"
 #include "sys/log.h"
-#include "coap-blocking-api.h"
+#include "coap-callback-api.h"
 #include "coap.h"
 
 #include "os/dev/button-hal.h"
@@ -27,9 +27,9 @@
 #define SETTINGS_URI "/settings"
 
 // Publish intervals
-#define LONG_INTERVAL CLOCK_SECOND * 10
-#define SHORT_INTERVAL CLOCK_SECOND * 2
-#define ANTIDUST_INTERVAL CLOCK_SECOND * 6
+#define LONG_INTERVAL CLOCK_SECOND * 15
+#define SHORT_INTERVAL CLOCK_SECOND * 7
+#define ANTIDUST_INTERVAL CLOCK_SECOND * 10
 #define BLINK_INTERVAL CLOCK_SECOND * 0.2
 
 // Power parameters
@@ -181,6 +181,26 @@ static void analyze_prediction(float prediction)
     }
 }
 
+void
+client_chunk_handler(coap_callback_request_state_t *state)
+{
+
+  coap_message_t *response = state->state.response;
+
+  const uint8_t *chunk;
+
+  if(response == NULL) {
+    puts("Request timed out");
+    return;
+  }
+
+//   int len = coap_get_payload(response, &chunk);
+
+//   printf("|%.*s", len, (char *)chunk);
+}
+
+static coap_callback_request_state_t req_state;
+
 PROCESS_THREAD(energy_node_process, ev, data) 
 {
     static struct etimer weather_battery_timer;
@@ -285,7 +305,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
             
             // Send request
             LOG_DBG("Sending green mode: %s\n", payload);
-            COAP_BLOCKING_REQUEST(&hvac_node_endpoint, request, NULL);
+            coap_send_request(&req_state, &hvac_node_endpoint, request, client_chunk_handler);
         }
 
         // Handle button events

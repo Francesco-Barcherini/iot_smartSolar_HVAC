@@ -5,7 +5,7 @@
 
 #include "contiki.h"
 #include "sys/log.h"
-#include "coap-blocking-api.h"
+#include "coap-callback-api.h"
 #include "coap-observe-client.h"
 
 #include "os/dev/button-hal.h"
@@ -32,10 +32,10 @@
 // #define ANTIDUST_URI "/antiDust"
 
 // Publish intervals
-#define LONG_INTERVAL CLOCK_SECOND * 10
-#define SHORT_INTERVAL CLOCK_SECOND * 2
+#define LONG_INTERVAL CLOCK_SECOND * 15
+#define SHORT_INTERVAL CLOCK_SECOND * 7
 #define BLINK_INTERVAL CLOCK_SECOND * 0.2
-#define GREEN_INTERVAL CLOCK_SECOND * 2
+#define GREEN_INTERVAL CLOCK_SECOND * 10
 
 // Power parameters
 #define VENT_POWER 50.0
@@ -70,6 +70,7 @@ extern coap_resource_t res_roomTemp, res_settings;
 
 // Custom events
 static process_event_t green_start_event;
+static process_event_t restart_obs;
 
 // Process
 PROCESS(hvac_node_process, "HVAC Node Process");
@@ -121,6 +122,14 @@ void handle_settings(float old_power, enum status_t old_status, enum cond_mode_t
         return;
     }
 
+    // print old and new
+    char old_power_str[16], old_target_temp_str[16];
+    LOG_INFO("Old settings: power=%s, status=%d, mode=%d, targetTemp=%s\n",
+             str(old_power, old_power_str), old_status, old_mode, str(old_target_temp, old_target_temp_str));
+    char new_power_str[16], new_target_temp_str[16];
+    LOG_INFO("New settings: power=%s, status=%d, mode=%d, targetTemp=%s\n",
+             str(conditioner_power, new_power_str), status, cond_mode, str(target_temp, new_target_temp_str));
+
     // normal -> green
     if (old_mode == MODE_NORMAL && cond_mode == MODE_GREEN)
     {
@@ -158,14 +167,15 @@ void get_value_from_json(const uint8_t *json, int len)
     char key[16];
     char value_str[16];
 
+    int next;
     jsonparse_setup(&state, (const char *)json, len);
 
     char name_buf[16] = {0};
     char value_buf[16] = {0};
     bool found_name = false;
 
-    while(jsonparse_next(&state) != JSON_TYPE_ERROR) {
-        if(jsonparse_get_type(&state) == JSON_TYPE_PAIR_NAME) {
+    while((next = jsonparse_next(&state)) != JSON_TYPE_ERROR) {
+        if(next == JSON_TYPE_PAIR_NAME) {
             jsonparse_copy_value(&state, key, sizeof(key));
 
             if(strcmp(key, "n") == 0) {
@@ -197,6 +207,8 @@ void get_value_from_json(const uint8_t *json, int len)
     }
 }
 
+static bool observing[3] = {false, false, false}; // Weather, Battery, Gen Power
+
 /* COAP Notification handler*/
 static void notification_callback(coap_observee_t* obs, void* notification, coap_notification_flag_t flag)
 {
@@ -210,6 +222,12 @@ static void notification_callback(coap_observee_t* obs, void* notification, coap
         case NOTIFICATION_OK:
             LOG_DBG("Received %s\n", (char *)payload);
             get_value_from_json(payload, len);
+            if (strcmp(obs->url, WEATHER_URI) == 0)
+                observing[0] = true;
+            else if (strcmp(obs->url, BATTERY_URI) == 0)
+                observing[1] = true;
+            else if (strcmp(obs->url, GEN_POWER_URI) == 0)
+                observing[2] = true;
             break;
         case OBSERVE_OK: /* server accepeted observation request */
             LOG_INFO("%s accepted observe request\n", obs->url);
@@ -230,9 +248,13 @@ static void notification_callback(coap_observee_t* obs, void* notification, coap
             LOG_WARN("%s did not reply: "
                     "removing observe registration with token %x%x\n",
                     obs->url, obs->token[0], obs->token[1]);
-            status = STATUS_ERROR;
-            handle_stop();
-            LOG_ERR("HVAC system in error state.\n");
+            process_post(&hvac_node_process, restart_obs, obs);
+            if (strcmp(obs->url, WEATHER_URI) == 0)
+                observing[0] = false;
+            else if (strcmp(obs->url, BATTERY_URI) == 0)
+                observing[1] = false;
+            else if (strcmp(obs->url, GEN_POWER_URI) == 0)
+                observing[2] = false;
             break;
     }
 }
@@ -250,6 +272,7 @@ void start_observation_weather()
 void start_observation_battery()
 {
     LOG_INFO("Starting battery observation\n");
+    coap_obs_remove_observee(battery_obs);
     battery_obs = coap_obs_request_registration(
         &energy_node_endpoint, BATTERY_URI, notification_callback, NULL
     );
@@ -258,6 +281,7 @@ void start_observation_battery()
 void start_observation_gen_power()
 {
     LOG_INFO("Starting gen power observation\n");
+    coap_obs_remove_observee(gen_power_obs);
     gen_power_obs = coap_obs_request_registration(
         &energy_node_endpoint, GEN_POWER_URI, notification_callback, NULL
     );
@@ -267,13 +291,35 @@ void stop_observation_battery()
 {
     LOG_INFO("Stopping battery observation\n");
     coap_obs_remove_observee(battery_obs);
+    observing[1] = false;
 }
 
 void stop_observation_gen_power()
 {
     LOG_INFO("Stopping gen power observation\n");
     coap_obs_remove_observee(gen_power_obs);
+    observing[2] = false;
 }
+
+void
+client_chunk_handler(coap_callback_request_state_t *state)
+{
+
+  coap_message_t *response = state->state.response;
+
+  const uint8_t *chunk;
+
+  if(response == NULL) {
+    puts("Request timed out");
+    return;
+  }
+
+//   int len = coap_get_payload(response, &chunk);
+
+//   printf("|%.*s", len, (char *)chunk);
+}
+
+static coap_callback_request_state_t req_state;
 
 PROCESS_THREAD(hvac_node_process, ev, data) 
 {
@@ -300,6 +346,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
 
     // Initialize events
     green_start_event = process_alloc_event();
+    restart_obs = process_alloc_event();
 
     // Initialize observations
     start_observation_weather();
@@ -334,6 +381,14 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                     continue;
                 }
 
+                if (!observing[0] || !observing[1] || !observing[2]) {
+                    LOG_DBG("Green mode: waiting observe registration complete\n");
+                    LOG_DBG("Observing: %d, %d, %d\n",
+                        observing[0], observing[1], observing[2]);
+                    etimer_reset(&green_timer);
+                    continue;
+                }
+
                 float needed_power;
 
                 if (status == STATUS_VENT)
@@ -349,51 +404,63 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                         needed_power = 0.0; // No need for power if cooling is not needed
                 }
 
-                char needed_power_str[16];
-                LOG_INFO("Green mode: needed power = %s W\n", str(needed_power, needed_power_str));
+                char needed_power_str[16], gen_power_str[16], battery_level_str[16];
+                LOG_DBG("Green mode: needed power = %s W, gen power = %s W, battery level = %s Wh\n",
+                         str(needed_power, needed_power_str), str(gen_power, gen_power_str), str(battery_level, battery_level_str));
 
                 coap_message_t request[1];
                 coap_init_message(request, COAP_TYPE_CON, COAP_POST, 0);
                 coap_set_header_uri_path(request, RELAY_URI);
-                coap_set_header_content_format(request, APPLICATION_JSON);
 
                 char payload[COAP_MAX_CHUNK_SIZE];
-                char buf[16];
+                char buf[16], buf2[16];
                 // compare with gen_power
                 if (needed_power <= gen_power) 
+                {
                     snprintf(payload, // Ask needed power to energy node
                         COAP_MAX_CHUNK_SIZE,
-                        "{\"n\":\"relay\",\"r_sp\":%d,\"r_h\":%d,\"p_sp\":%s,\"p_h\":%s}",
-                        RELAY_SP_HOME, RELAY_HOME_SP, str(needed_power, buf), buf);
+                        "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
+                        (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(needed_power, buf), str(needed_power, buf2));
+                    conditioner_power = needed_power; // Update conditioner power
+                }
                 else
                 {
                     // try with the battery
                     float dc_needed_power = needed_power * DC_AC_COEFF;
                     if (dc_needed_power * GREEN_INTERVAL <= battery_level) // battery is enough
+                    {
                         snprintf(payload, // Ask needed power to energy node
                             COAP_MAX_CHUNK_SIZE,
-                            "{\"n\":\"relay\",\"r_sp\":%d,\"r_h\":%d,\"p_sp\":%s,\"p_h\":%s}",
-                            RELAY_SP_BATTERY, RELAY_HOME_BATTERY, str(dc_needed_power, buf), buf);
+                            "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
+                            (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(dc_needed_power, buf2));
+                        conditioner_power = needed_power;
+                    }
                     else // not enough power
                     {
-                        // if heat, try vent
-                        if (status == STATUS_HEAT)
+                        // if cool, try vent
+                        if (status == STATUS_COOL)
                         {
                             // gen_power is enough
                             if (VENT_POWER <= gen_power)
+                            {
                                 snprintf(payload, // Ask vent power to energy node
                                     COAP_MAX_CHUNK_SIZE,
-                                    "{\"n\":\"relay\",\"r_sp\":%d,\"r_h\":%d,\"p_sp\":%s,\"p_h\":%s}",
-                                    RELAY_SP_HOME, RELAY_HOME_SP, str(VENT_POWER, buf), buf);
+                                    "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
+                                    (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(VENT_POWER, buf), str(VENT_POWER, buf2));
+                                conditioner_power = VENT_POWER;
+                            }
                             else
                             {
                                 // try with the battery
                                 float dc_needed_power = VENT_POWER * DC_AC_COEFF;
-                                if (dc_needed_power * GREEN_INTERVAL <= battery_level) // battery is enough
+                                if (dc_needed_power * GREEN_INTERVAL/CLOCK_SECOND <= battery_level) // battery is enough
+                                {
                                     snprintf(payload, // Ask vent power to energy node
                                         COAP_MAX_CHUNK_SIZE,
-                                        "{\"n\":\"relay\",\"r_sp\":%d,\"r_h\":%d,\"p_sp\":%s,\"p_h\":%s}",
-                                        RELAY_SP_BATTERY, RELAY_HOME_BATTERY, str(dc_needed_power, buf), buf);
+                                        "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
+                                        (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(dc_needed_power, buf2));
+                                        conditioner_power = VENT_POWER;
+                                }
                                 else // not enough in any case
                                 {
                                     LOG_WARN("Not enough power for green mode, stopping the hvac.\n");
@@ -404,15 +471,28 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                                 }
                             }
                         }
+                        else // not enough in any case
+                        {
+                            LOG_WARN("Not enough power for green mode, stopping the hvac.\n");
+                            status = STATUS_OFF;
+                            handle_stop();
+                            res_settings.trigger();
+                            continue;
+                        }
                     }
                 }
-                coap_set_payload(request, payload, strlen(payload));
-                COAP_BLOCKING_REQUEST(&energy_node_endpoint, request, NULL);
+                char power_str[16], target_temp_str[16];
+                LOG_INFO("New settings: power=%s, status=%d, mode=%d, targetTemp=%s\n",
+                str(conditioner_power, power_str), status, cond_mode, str(target_temp, target_temp_str));
+
+                coap_set_payload(request, (uint8_t *) payload, strlen(payload));
+                coap_send_request(&req_state, &energy_node_endpoint, request, client_chunk_handler);
                 LOG_DBG("Green mode request sent: %s\n", payload);
+
                 // Reset the timer for the next green mode check
                 etimer_reset(&green_timer);
 
-                // TODO: Trigger th new settings?
+                // TODO: Trigger the new settings?
             }
         }
         // Handle green mode
@@ -423,6 +503,22 @@ PROCESS_THREAD(hvac_node_process, ev, data)
             start_observation_gen_power();
 
             etimer_set(&green_timer, GREEN_INTERVAL);
+        }
+        // restart failed observation
+        else if (ev == restart_obs)
+        {
+            // data is the observee that failed
+            coap_observee_t* obs = (coap_observee_t*) data;
+            LOG_DBG("Restarting observation for %s\n", obs->url);
+            if (strcmp(obs->url, WEATHER_URI) == 0) {
+                start_observation_weather();
+            } else if (strcmp(obs->url, BATTERY_URI) == 0) {
+                start_observation_battery();
+            } else if (strcmp(obs->url, GEN_POWER_URI) == 0) {
+                start_observation_gen_power();
+            } else {
+                LOG_ERR("Unknown observee URL: %s\n", obs->url);
+            }
         }
 #if PLATFORM_HAS_BUTTON
         else if (ev == button_hal_periodic_event) {

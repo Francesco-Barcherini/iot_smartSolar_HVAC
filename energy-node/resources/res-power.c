@@ -60,7 +60,7 @@ void gen_power_json_string(char* buffer)
     char buf[16];
     snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE, 
-            "{\"n\":\"gen_power\",\"v\":%s}", 
+            "{\"n\":\"gen_power\",\"v\":\"%s\"}", 
             str(gen_power, buf));
 }
 
@@ -84,6 +84,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
     coap_set_payload(response, buffer, strlen((char *)buffer));
 
     LOG_DBG("gen_power resource GET handler called\n");
+    LOG_DBG("Sending generated power: %s W\n", (char *)buffer);
 }
 
 static void res_event_handler(void)

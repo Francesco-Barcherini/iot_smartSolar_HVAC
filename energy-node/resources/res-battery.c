@@ -14,6 +14,7 @@ char* str(float value, char* output);
 
 // Battery parameters
 #define BATTERY_CAPACITY 10000 // in Wh
+#define DC_AC_COEFF 10.0
 
 static float battery_level = 5000.0; // in Wh
 float charge_rate = 0.0; // in W
@@ -27,7 +28,7 @@ static void update_battery_level()
     unsigned long elapsedTime = currentTime - lastUpdateTime;
 
     // Update battery level based on charge rate and elapsed time
-    battery_level += charge_rate * (elapsedTime / 3600.0); // convert seconds to hours
+    battery_level += DC_AC_COEFF * charge_rate * (elapsedTime / 3600.0); // convert seconds to hours
 
     // Ensure battery level stays within bounds
     if (battery_level < 0) {

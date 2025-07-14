@@ -65,9 +65,9 @@ def remote_control_logic(component):
                 rel_sp = 1 if battery_power < 0.9 * BATTERY_CAPACITY else 2
                 if dc_needed_power * BATTERY_INTERVAL <= battery_power:
                     print("Using battery power")
-                    HVAC_DB.insert_relay_data(rel_sp, 1, gen_power, dc_needed_power)
+                    HVAC_DB.insert_relay_data(rel_sp, 1, gen_power, needed_power)
                     HVAC_DB.insert_hvac_data(needed_power, hvac_status, hvac_mode, target_temp)
-                    energy_payload = f'r_sp={rel_sp}&r_h=1&p_sp={gen_power}&p_h={dc_needed_power}'
+                    energy_payload = f'r_sp={rel_sp}&r_h=1&p_sp={gen_power}&p_h={needed_power}'
                     hvac_payload = f'pw=0&status=same&mode=normal&targetTemp=-1.0'
                     client_energy.put(conf.RELAY_URL, energy_payload)
                     client_hvac.put(conf.SETTINGS_URL, hvac_payload)
@@ -92,9 +92,9 @@ def remote_control_logic(component):
             dc_needed_power = cons_pw * DC_AC_COEFF
             if dc_needed_power * BATTERY_INTERVAL <= battery_power:
                 print("Using battery power for AntiDust")
-                HVAC_DB.insert_rely_data(0, 1, 0.0, dc_needed_power)
+                HVAC_DB.insert_rely_data(0, 1, 0.0, needed_power)
                 HVAC_DB.insert_hvac_data(cons_pw, hvac_status, 0, target_temp)
-                energy_payload = f'r_sp=0&r_h=1&p_sp=0.0&p_h={dc_needed_power}'
+                energy_payload = f'r_sp=0&r_h=1&p_sp=0.0&p_h={needed_power}'
                 hvac_payload = f'pw=0&status=same&mode=normal&targetTemp=-1.0'
                 client_energy.put(conf.RELAY_URL, energy_payload)
                 client_hvac.put(conf.SETTINGS_URL, hvac_payload)

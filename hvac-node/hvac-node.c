@@ -338,7 +338,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
     //setlocale(LC_NUMERIC, "C");
 
     // Initialize resources
-    coap_activate_resource(&res_roomTemp, "roomTemp");
+    coap_activate_resource(&res_roomTemp, "sensors/roomTemp");
     coap_activate_resource(&res_settings, "settings");
 
     // Initialize CoAP endpoint
@@ -432,7 +432,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                         snprintf(payload, // Ask needed power to energy node
                             COAP_MAX_CHUNK_SIZE,
                             "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
-                            (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(dc_needed_power, buf2));
+                            (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(needed_power, buf2));
                         conditioner_power = needed_power;
                     }
                     else // not enough power
@@ -458,7 +458,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                                     snprintf(payload, // Ask vent power to energy node
                                         COAP_MAX_CHUNK_SIZE,
                                         "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
-                                        (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(dc_needed_power, buf2));
+                                        (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(VENT_POWER, buf2));
                                         conditioner_power = VENT_POWER;
                                 }
                                 else // not enough in any case

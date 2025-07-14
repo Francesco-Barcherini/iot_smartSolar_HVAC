@@ -24,22 +24,6 @@ enum status_t status = STATUS_OFF;
 enum cond_mode_t cond_mode = MODE_NORMAL;
 float target_temp = 27.5;
 
-// void update_settings(float new_power, enum status_t new_status, enum cond_mode_t new_mode)
-// {
-//     if (new_power < MIN_POWER || new_power > MAX_POWER) {
-//         LOG_ERR("Invalid power value: %f\n", new_power);
-//         return;
-//     }
-
-//     conditioner_power = new_power == -1.0 ? conditioner_power : new_power; // -1.0 means no change
-//     status = new_status;
-//     cond_mode = new_mode;
-
-//     char power_str[16];
-//     LOG_INFO("HVAC settings updated: power=%s, status=%d, mode=%d\n",
-//              str(conditioner_power, power_str), status, cond_mode);
-// }
-
 void settings_json_string(char* buffer)
 {
     // json of settings

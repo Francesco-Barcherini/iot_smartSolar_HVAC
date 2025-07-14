@@ -7,6 +7,38 @@ import paho.mqtt.client as mqtt
 import config.app_config as conf
 from modules.mqtt_manager import get_mqtt_client
 
+SP = {
+    0: "SP->HVAC",
+    1: "SP->BATT",
+    2: "SP->GRID"
+}
+
+H = {
+    0: "HVAC<-SP",
+    1: "HVAC<-BATT",
+    2: "HVAC<-GRID"
+}
+
+def print_get_all(data):
+
+    # Print the key and if has "v" its value
+    for key, val in data.items():
+        if isinstance(val, dict) and 'v' in val:
+            print(f"  {key}: {val['v']}")
+        else:
+            if key == "relay":
+                print(f"  {key}: {SP[val['r_sp']]} {val['p_sp']}W \t {H[val['r_h']]} {val['p_h']}W")
+            elif key == "settings":
+                status_map = {0: "off", 1: "vent", 2: "cool", 3: "heat", 4: "error", 5: "same"}
+                mode_map = {0: "normal", 1: "green"}
+                print(f"  {key}: {val['targetTemp']}°C \t {status_map[val['status']]} \t mode={mode_map[val['mode']]} \t "
+                      f"pw={val['pw']}W")
+            elif key == "weather":
+                print(f"  {key}: {val['outTemp']}°C \t {val['modTemp']}°C \t {val['irr']}kW/m²")
+            else:
+                print(f"  {key}: {val}")
+
+
 
 # ========== PERIODIC GET /all ==========
 stop_get_all = False
@@ -21,8 +53,7 @@ def periodic_get_all():
             if r.status_code == 200:
                 data = r.json()
                 print("\n[DATA UPDATE] Current system status:")
-                for key, val in data.items():
-                    print(f"  {key}: {val}")
+                print_get_all(data)
                 print("> ", end='', flush=True)
         except Exception as e:
             print(f"[ERROR] Could not fetch /all: {e}")

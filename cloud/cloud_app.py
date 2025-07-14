@@ -292,7 +292,26 @@ def get_all_data():
         # Get settings data from CoAP GET request
         settings_response = client_hvac.get(conf.SETTINGS_URL)
         settings_data = json.loads(settings_response.payload) if settings_response.payload else {}
-        data["settings"] = settings_data    
+        data["settings"] = settings_data
+
+        try:
+            # Get stats from the DB
+            # Total HVAC power consumption of the last hour
+            total_power = HVAC_DB.get_total_hvac_power_consumption(3600)
+            data["HVAC consumption (1h)"] = total_power
+
+            # Net balance of the last hour of energy sent to the grid
+            net_balance = HVAC_DB.get_net_balance(3600)
+            data["Grid power balance"] = net_balance
+
+            # Last antiDust operation time
+            last_anti_dust = HVAC_DB.get_last_anti_dust_operation_time()
+            print(f"Last antiDust operation time: {last_anti_dust}")
+            data["Last antiDust operation"] = last_anti_dust
+        except mysql.connector.Error as e:
+            print(f"Database error: {e}")
+            HVAC_DB.connect()
+
         return jsonify(data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -305,6 +324,12 @@ def set_relay():
         # send the request to coap in key=value format
         coap_payload = f'r_sp={payload["r_sp"]}&r_h={payload["r_h"]}&p_sp={payload["p_sp"]}&p_h={payload["p_h"]}'
         client_energy.put(conf.RELAY_URL, coap_payload)
+        HVAC_DB.insert_relay_data(
+            payload["r_sp"], 
+            payload["r_h"], 
+            payload["p_sp"], 
+            payload["p_h"]
+        )
         return "Relay command accepted", 200
 
     except Exception as e:
@@ -319,7 +344,11 @@ def set_anti_dust():
     except Exception as e:
         return f"Error: {e}", 400
     global energy_antiDust
-    energy_antiDust = int(payload["v"])
+    # if different update and store
+    if energy_antiDust != int(payload["v"]):
+        HVAC_DB.insert_anti_dust_data(int(payload["v"]))
+        energy_antiDust = int(payload["v"])
+        mq_client.publish("antiDust", energy_antiDust)
     return "AntiDust command accepted", 200
 
 STATUS_MAP = {
@@ -348,6 +377,14 @@ def set_settings():
     hvac_status = STATUS_MAP.get(payload["status"], 0)
     hvac_mode = MODE_MAP.get(payload["mode"], 0)
     target_temp = float(payload["targetTemp"])
+    HVAC_DB.insert_hvac_data(
+        payload["pw"], 
+        hvac_status, 
+        hvac_mode, 
+        target_temp
+    )
+    if hvac_status == 4:
+        mq_client.publish("hvac", "alarm")
     return "Settings command accepted", 200
     
 def flask_app():

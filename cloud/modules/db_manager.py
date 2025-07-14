@@ -28,6 +28,19 @@ class MySQLDB():
         )
         print("Connected to database ", self._database)
 
+    def connect(self):
+        if not self._database.is_connected():
+            print("Reconnecting to MySQL...")
+            self._database = mysql.connector.connect(
+                host=app_config.DB_HOST,
+                user=app_config.DB_USER,
+                password=app_config.DB_PASSWORD,
+                database=app_config.DB_NAME
+            )
+            print("Reconnected to database ", self._database)
+        else:
+            print("Already connected to the database")
+
     def reset_db(self):
         print('Resetting Database')
         reset_cursor = self._database.cursor()
@@ -68,10 +81,17 @@ class MySQLDB():
         self._database.commit()
         print('Database reset completed')
 
+    def ensure_mysql_connection(self, conn):
+        try:
+            conn.ping(reconnect=True)
+        except Exception as e:
+            print("🔁 Reconnecting to MySQL...")
+            self.connect()
+
 
     def insert_sensor_data(self, sensor, value):
         cursor = self._database.cursor()
-        cursor.execute(f'INSERT INTO Sensors (sensor, value) VALUES ({sensor}, {value})')
+        cursor.execute(f'INSERT INTO Sensors (sensor, value) VALUES ("{sensor}", {value})')
         self._database.commit()
         if cursor.rowcount > 0:
             print(f'Sensor data inserted: {sensor} - {value}')
@@ -107,6 +127,13 @@ class MySQLDB():
         cursor = self._database.cursor()
         cursor.execute(f'SELECT * FROM Sensors WHERE sensor = "{sensor}" ORDER BY timestamp DESC LIMIT {num}')
         return cursor.fetchall()
+
+    def close(self):
+        if self._database.is_connected():
+            self._database.close()
+            print("Database connection closed")
+        else:
+            print("Database connection was already closed")
 
 # Create a shared instance of MySQLDB
 HVAC_DB = MySQLDB()    

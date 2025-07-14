@@ -9,9 +9,13 @@ from modules.mqtt_manager import get_mqtt_client
 
 
 # ========== PERIODIC GET /all ==========
-
+stop_get_all = False
 def periodic_get_all():
     while True:
+        global stop_get_all
+        if stop_get_all:
+            time.sleep(2)
+            continue
         try:
             r = requests.get(f"{conf.HTTP_SERVER}/all")
             if r.status_code == 200:
@@ -34,8 +38,11 @@ def send_post(endpoint, json_data):
         print(f"[ERROR] POST to /{endpoint}: {e}")
 
 def menu():
+    global stop_get_all
     while True:
+        stop_get_all = False
         print("\nChoose an operation:")
+        print("0. help")
         print("1. Send /relay settings")
         print("2. Send /antiDust signal")
         print("3. Send /settings")
@@ -43,7 +50,10 @@ def menu():
         print("5. Exit")
         choice = input("> ")
 
-        if choice == "1":
+        if choice == "0":
+            continue
+        elif choice == "1":
+            stop_get_all = True
             try:
                 r_sp = int(input("Relay SP (0|1|2): "))
                 r_h = int(input("Relay H (0|1|2): "))
@@ -54,12 +64,14 @@ def menu():
             except ValueError:
                 print("Invalid input.")
         elif choice == "2":
+            stop_get_all = True
             try:
                 v = int(input("antiDust value (on|off): "))
                 send_post("antiDust", {"n": "antiDust", "v": v})
             except ValueError:
                 print("Invalid input.")
         elif choice == "3":
+            stop_get_all = True
             try:
                 pw = float(input("Consumed power: "))
                 status = input("Status (off|vent|cool|heat|error|same): ")
@@ -70,6 +82,7 @@ def menu():
             except ValueError:
                 print("Invalid input.")
         elif choice == "4":
+            stop_get_all = True
             try:
                 r = requests.get(f"{conf.HTTP_SERVER}/all")
                 print("[MANUAL /all] Response:")
@@ -77,6 +90,7 @@ def menu():
             except Exception as e:
                 print(f"[ERROR] Could not GET /all: {e}")
         elif choice == "5":
+            stop_get_all = True
             print("Exiting...")
             break
         else:

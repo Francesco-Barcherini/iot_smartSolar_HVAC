@@ -62,3 +62,5 @@ dkms.conf
 .vscode
 
 tmp
+
+__pycache__

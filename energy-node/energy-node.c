@@ -51,6 +51,7 @@ float solar_power_predict();
 void update_antiDust(enum antiDust_t newState);
 void updateChargeRate(float rate);
 void update_relay(enum relay_sp_t new_relay_sp, enum relay_home_t new_relay_home, float new_power_sp, float new_power_home);
+extern float charge_rate;
 
 // Status
 enum status_t {STATUS_ON, STATUS_ANTIDUST, STATUS_ALARM};
@@ -247,7 +248,8 @@ PROCESS_THREAD(energy_node_process, ev, data)
             if (data == &weather_battery_timer) {
                 // Trigger weather and battery resources
                 res_weather.trigger();
-                res_battery.trigger();
+                if (charge_rate != 0.0)
+                    res_battery.trigger(); // Trigger battery only if charge rate is set
                 etimer_reset(&weather_battery_timer);
             }
             else if (data == &gen_power_timer) {

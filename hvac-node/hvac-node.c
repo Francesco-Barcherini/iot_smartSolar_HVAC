@@ -231,6 +231,13 @@ static void notification_callback(coap_observee_t* obs, void* notification, coap
             break;
         case OBSERVE_OK: /* server accepeted observation request */
             LOG_INFO("%s accepted observe request\n", obs->url);
+            get_value_from_json(payload, len);
+            if (strcmp(obs->url, WEATHER_URI) == 0)
+                observing[0] = true;
+            else if (strcmp(obs->url, BATTERY_URI) == 0)
+                observing[1] = true;
+            else if (strcmp(obs->url, GEN_POWER_URI) == 0)
+                observing[2] = true;
             break;
         case OBSERVE_NOT_SUPPORTED:
             LOG_WARN("%s does not support observation\n", obs->url);

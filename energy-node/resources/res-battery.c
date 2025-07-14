@@ -17,7 +17,7 @@ char* str(float value, char* output);
 #define DC_AC_COEFF 10.0
 
 static float battery_level = 5000.0; // in Wh
-static float charge_rate = 0.0; // in W
+float charge_rate = 0.0; // in W
 static unsigned long lastUpdateTime = 0;
 
 static void update_battery_level()
@@ -92,11 +92,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 }
 
 static void res_event_handler(void)
-{
-    // TODO: avoid to send when did not change (but send when starting observing)
-    // if (charge_rate == 0.0)
-    // return;  
-    
+{    
     update_battery_level();
     coap_notify_observers(&res_battery);
 

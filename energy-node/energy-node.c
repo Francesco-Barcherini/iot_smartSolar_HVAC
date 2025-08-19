@@ -270,7 +270,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
                     if (energyNodeStatus == STATUS_ANTIDUST)
                     {
                         etimer_set(&end_antiDust_timer, ANTIDUST_INTERVAL);
-                        LOG_DBG("Anti-dust mode active, will end in %d seconds\n", ANTIDUST_INTERVAL / CLOCK_SECOND);
+                        LOG_DBG("Anti-dust mode active, will end in %d seconds\n", (int) (ANTIDUST_INTERVAL / CLOCK_SECOND));
                     }
                 }
                 etimer_reset(&prediction_timer);

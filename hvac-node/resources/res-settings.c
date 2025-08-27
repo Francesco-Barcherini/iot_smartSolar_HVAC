@@ -128,11 +128,13 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
     }
 
     if (req_mode != NULL) {
-        if (strcmp(req_mode, "normal") == 0) {
+        if (strcmp(req_mode, "normal") == 0)
             new_mode = MODE_NORMAL;
-        } else if (strcmp(req_mode, "green") == 0) {
+        else if (strcmp(req_mode, "green") == 0)
             new_mode = MODE_GREEN;
-        } else {
+        else if (strcmp(req_mode, "same") == 0)
+            new_mode = cond_mode; // No change
+        else {
             LOG_ERR("Invalid mode: %s\n", req_mode);
             coap_set_status_code(response, BAD_REQUEST_4_00);
             return;

@@ -39,8 +39,8 @@
 
 // Power parameters
 #define VENT_POWER 50.0
-#define DELTAT_COEFF 0.05
-#define POWER_COEFF 1 / 1000.0 // Assuming max power is 1000 W
+#define DELTAT_COEFF 0.0005
+#define POWER_COEFF 0.00005
 #define SECONDS 60.0
 #define DC_AC_COEFF 10.0
 
@@ -64,6 +64,7 @@ float battery_level = 5000.0;
 
 
 static struct etimer green_timer;
+struct etimer sleep_timer;
 
 // Resources
 extern coap_resource_t res_roomTemp, res_settings;
@@ -358,6 +359,21 @@ PROCESS_THREAD(hvac_node_process, ev, data)
     // Initialize observations
     start_observation_weather();
 
+    // Wait connection
+    while (!coap_endpoint_is_connected(&energy_node_endpoint)) {
+            LOG_DBG("Waiting for connection to energy node...\n");
+            etimer_set(&sleep_timer, CLOCK_SECOND * 2);
+            PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&sleep_timer));
+            #if PLATFORM_HAS_LEDS || LEDS_COUNT
+                leds_toggle(LEDS_RED);
+            #endif
+        }
+        etimer_stop(&sleep_timer);
+        LOG_DBG("Connected to energy node\n");
+    #if PLATFORM_HAS_LEDS || LEDS_COUNT
+        leds_on(LEDS_RED);
+    #endif
+
     // Initialize timers
     etimer_set(&rootTemp_timer, SHORT_INTERVAL);
 
@@ -402,7 +418,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                     needed_power = VENT_POWER;
                 else
                 {
-                    needed_power = (0.2 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF;
+                    needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF;
                     needed_power /= POWER_COEFF;
                     if (status == STATUS_COOL)
                         needed_power = -needed_power; // Cool mode uses negative power

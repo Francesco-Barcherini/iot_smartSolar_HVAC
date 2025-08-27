@@ -50,8 +50,11 @@ extern bool defected; // true if the solar panel is defected
 float solar_power_predict();
 void update_antiDust(enum antiDust_t newState);
 void updateChargeRate(float rate);
+void updateBatteryChargeRate();
 void update_relay(enum relay_sp_t new_relay_sp, enum relay_home_t new_relay_home, float new_power_sp, float new_power_home);
 extern float charge_rate;
+extern enum relay_sp_t relay_sp;
+extern float power_sp;
 
 // Status
 enum status_t {STATUS_ON, STATUS_ANTIDUST, STATUS_ALARM};
@@ -60,6 +63,7 @@ enum status_t energyNodeStatus = STATUS_ON;
 static unsigned int nWrongPredictions = 0; // Counter for wrong predictions
 
 struct etimer blink_timer;
+struct etimer sleep_timer;
 
 // CoAP observation
 static coap_endpoint_t hvac_node_endpoint;
@@ -91,7 +95,7 @@ static void alarm_handler()
     updateChargeRate(0.0); // Stop charging
 
     // relay control
-    update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, -1.0);
+    update_relay(RELAY_SP_GRID, RELAY_HOME_GRID, gen_power, -1.0);
     res_relay.trigger();
 
     process_post(&energy_node_process, send_green_setting_event, NULL);
@@ -233,6 +237,21 @@ PROCESS_THREAD(energy_node_process, ev, data)
     // Initialize CoAP endpoint
     coap_endpoint_parse(HVAC_NODE_EP, strlen(HVAC_NODE_EP), &hvac_node_endpoint);
 
+    // Wait connection
+    while (!coap_endpoint_is_connected(&hvac_node_endpoint)) {
+        LOG_DBG("Waiting for connection to HVAC node...\n");
+        etimer_set(&sleep_timer, CLOCK_SECOND * 2);
+        PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&sleep_timer));
+        #if PLATFORM_HAS_LEDS || LEDS_COUNT
+            leds_toggle(LEDS_GREEN);
+        #endif 
+    }
+    etimer_stop(&sleep_timer);
+    LOG_DBG("Connected to HVAC node\n");
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    leds_on(LEDS_GREEN);
+#endif
+
     // Initialize timers
     etimer_set(&weather_battery_timer, LONG_INTERVAL);
     etimer_set(&gen_power_timer, SHORT_INTERVAL);
@@ -254,8 +273,13 @@ PROCESS_THREAD(energy_node_process, ev, data)
             }
             else if (data == &gen_power_timer) {
                 // Trigger power generation resource
-                if (energyNodeStatus == STATUS_ON)
+                if (energyNodeStatus == STATUS_ON) {
                     res_gen_power.trigger();
+                    updateBatteryChargeRate();
+                    if (relay_sp == RELAY_SP_BATTERY || relay_sp == RELAY_SP_GRID)
+                        power_sp = gen_power;
+                }
+                    
                 etimer_reset(&gen_power_timer);
             }
             else if (data == &prediction_timer) {

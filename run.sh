@@ -3,7 +3,8 @@
 #---------------------------------------------
 # List of nodes to compile
 NODE_LIST="energy-node hvac-node"
-TARGET_BOARD="TARGET=nrf52840 BOARD=dongle"
+TARGET="nrf52840"
+BOARD="dongle"
 
 function compile_node(){
     local node_name=$1
@@ -11,7 +12,7 @@ function compile_node(){
 
     cd ./$node_name
     make distclean 2>&1 | grep -E "error|warning|TARGET not defined, using target 'native'" | grep -v "CC "
-    make $TARGET_BOARD $node_name 2>&1 | grep -E "error|warning|TARGET not defined, using target 'native'" | grep -v "CC "
+    make TARGET=$TARGET BOARD=$BOARD $node_name 2>&1 | grep -E "error|warning|TARGET not defined, using target 'native'" | grep -v "CC "
     cd "$actual_path"
 }
 
@@ -26,16 +27,16 @@ function compile_all_nodes(){
 }
 
 function run_cooja(){
-    gnome-terminal -- bash -c 'cd ..; cd tools/cooja; ./gradlew run; exec bash'
+    gnome-terminal --tab -- bash -c 'cd ..; cd tools/cooja; ./gradlew run;'
 }
 
 function run_rpl_border_router(){
     local target=$1
     if [ "$target" != "cooja" ]; then
-        gnome-terminal -- bash -c 'cd rpl-border-router;make TARGET=nrf52840 BOARD=dongle PORT=/dev/ttyACM2 connect-router;'
+        gnome-terminal --tab -- bash -c 'cd rpl-border-router;make TARGET=nrf52840 BOARD=dongle PORT=/dev/ttyACM2 connect-router;'
         echo "Connecting rpl-border-router to dongle"
     else
-        gnome-terminal -- bash -c 'cd rpl-border-router;make TARGET=cooja connect-router-cooja;'
+        gnome-terminal --tab -- bash -c 'cd rpl-border-router;make TARGET=cooja connect-router-cooja;'
         echo "Connecting rpl-border-router to cooja"
     fi
     
@@ -44,10 +45,14 @@ function run_rpl_border_router(){
 function run_cloud(){
     local target=$1
     local newdb=$2
-    echo "Starting cloud..."
-    gnome-terminal -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb'; exec bash'
-    gnome-terminal -- bash -c 'cd ./cloud; python3 ./http_server.py; exec bash'    
-    gnome-terminal -- bash -c 'cd ./cloud; python3 ./user_app.py; exec bash'
+    echo "Starting cloud application..."
+    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default;'
+    echo "Cloud application started successfully!"
+
+    echo "Press any key to start the HTTP server and User application..."
+    read -n 1 -s
+    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./http_server.py;'    
+    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./user_app.py;'
     echo "Cloud application, HTTP server and User application started successfully!"
 }
 
@@ -59,7 +64,7 @@ function flash_sensor() {
     if [ -n "$node_name" ]; then
         echo "Flashing $node_name sensor on $port..."
         cd ./$node_name || exit 1
-        make $TARGET_BOARD ${node_name}.dfu-upload PORT=$port
+        make TARGET=$TARGET BOARD=$BOARD ${node_name}.dfu-upload PORT=$port
         cd - > /dev/null || exit 1
     else
         echo "Invalid sensor name: $node_name"
@@ -70,7 +75,7 @@ function flash_sensor() {
 function flash_rpl_border_router() {
     echo "Flashing RPL border router on /dev/ttyACM2..."
     cd rpl-border-router || exit 1
-    make $TARGET_BOARD PORT=/dev/ttyACM2 border-router.dfu-upload
+    make TARGET=$TARGET BOARD=$BOARD PORT=/dev/ttyACM2 border-router.dfu-upload
     cd - > /dev/null || exit 1
 }
 
@@ -132,6 +137,9 @@ case $1 in
     # user)
     #     run_user_app
     #     ;;
+    flash_sensor)
+        flash_sensor $2 $3
+        ;;
     flash)
         flash
         ;;

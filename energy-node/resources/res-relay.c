@@ -19,9 +19,9 @@ void updateChargeRate(float rate);
 enum relay_sp_t { RELAY_SP_HOME, RELAY_SP_BATTERY, RELAY_SP_GRID };
 enum relay_home_t { RELAY_HOME_SP, RELAY_HOME_BATTERY, RELAY_HOME_GRID };
 
-static enum relay_sp_t relay_sp = RELAY_SP_HOME; // Relay state for solar panel
-static enum relay_home_t relay_home = RELAY_HOME_SP; // Relay state for home
-static float power_sp = 0.0; // Power from solar panel
+enum relay_sp_t relay_sp = RELAY_SP_BATTERY; // Relay state for solar panel
+static enum relay_home_t relay_home = RELAY_HOME_GRID; // Relay state for home
+float power_sp = 0.0; // Power from solar panel
 static float power_home = 0.0; // Power for home
 
 void updateBatteryChargeRate()

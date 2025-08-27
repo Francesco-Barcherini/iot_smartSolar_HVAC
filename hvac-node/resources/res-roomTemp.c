@@ -17,8 +17,8 @@
 
 // T_new = T_old + (deltaT * c1 - power * c2) * elapsed_time
 // Temperature parameters
-#define DELTAT_COEFF 0.05
-#define POWER_COEFF 1 / MAX_POWER
+#define DELTAT_COEFF 0.0005
+#define POWER_COEFF 0.00005
 #define MAX_RANDOM_OFFSET 0.2
 #define MIN_TEMP 15.0
 #define MAX_TEMP 40.0

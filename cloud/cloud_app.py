@@ -48,6 +48,7 @@ def normal_feedback_logic():
         needed_power /= POWER_COEFF
         needed_power = -needed_power if hvac_status == 2 else needed_power
         needed_power = max(needed_power, 0.0)
+        needed_power = round(needed_power, 2) # round to 10e-2
     print(f"needed_power: {needed_power} W")
 
     gen_power = HVAC_DB.get_last_sensor_entries("gen_power", 1)[0][2]
@@ -93,7 +94,7 @@ def handle_energy_with_hvac_down(is_gen_power):
         return
     rel_sp = new_rel_sp 
     HVAC_DB.insert_relay_data(rel_sp, 0, gen_power, 0.0)
-    energy_payload = f'r_sp={rel_sp}&r_h=0&p_sp={gen_power}&p_h=0.0'
+    energy_payload = f'r_sp={rel_sp}&r_h=2&p_sp={gen_power}&p_h=0.0'
     client_energy.put(conf.RELAY_URL, energy_payload)
 
 def remote_control_logic(component):

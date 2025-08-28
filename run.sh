@@ -6,6 +6,23 @@ NODE_LIST="energy-node hvac-node"
 TARGET="nrf52840"
 BOARD="dongle"
 
+function login_sensor(){
+    local node_name=$1
+    local port=$2
+
+    if [ -n "$node_name" ]; then
+        echo "Logging into $node_name sensor on $port..."
+        gnome-terminal --tab -- bash -c 'cd ./'$node_name'; make TARGET='$TARGET' BOARD='$BOARD' login PORT='$port''
+    else
+        echo "Invalid sensor name: $node_name"
+    fi
+}
+
+function login(){
+    login_sensor "energy-node" "/dev/ttyACM0"
+    login_sensor "hvac-node" "/dev/ttyACM1"
+}
+
 function compile_node(){
     local node_name=$1
     local actual_path=$(pwd)
@@ -46,7 +63,7 @@ function run_cloud(){
     local target=$1
     local newdb=$2
     echo "Starting cloud application..."
-    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default;'
+    gnome-terminal --tab --active -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default'
     echo "Cloud application started successfully!"
 
     echo "Press any key to start the HTTP server and User application..."
@@ -149,6 +166,7 @@ case $1 in
         echo "Press any key to start the cloud application..."
         read -n 1 -s
         run_cloud $2 $3
+        login
         ;;
     *)
         echo "------------------------------------------------------------------HELP----------------------------------------------------------------"

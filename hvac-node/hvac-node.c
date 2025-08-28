@@ -248,8 +248,6 @@ static void notification_callback(coap_observee_t* obs, void* notification, coap
             break;
         case ERROR_RESPONSE_CODE:
             LOG_WARN("%s sent error code: %*s\n", obs->url, len, (char *)payload);
-            status = STATUS_ERROR;
-            handle_stop();
             LOG_ERR("HVAC system in error state.\n");
             break;
         case NO_REPLY_FROM_SERVER:

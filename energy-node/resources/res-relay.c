@@ -94,11 +94,6 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
 
     int len;
 
-    // log the payload
-    char pay[COAP_MAX_CHUNK_SIZE];
-    LOG_DBG("Received payload: %.*s\n", 
-                coap_get_payload(request, (const uint8_t **)&pay), pay);
-
     len = coap_get_post_variable(request, "r_sp", &buffer_var);
     if (len > 0 && len < 15)
     {

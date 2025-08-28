@@ -100,6 +100,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
     coap_set_payload(response, buffer, strlen((char *)buffer));
 
     LOG_DBG("Room temperature resource GET handler called\n");
+    LOG_DBG("Sending roomTemp: %s°C\n", (char *)buffer);
 }
 
 static void res_event_handler(void)

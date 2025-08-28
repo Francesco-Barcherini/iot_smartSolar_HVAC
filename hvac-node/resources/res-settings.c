@@ -55,6 +55,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
     coap_set_payload(response, buffer, strlen((char *)buffer));
 
     LOG_DBG("settings resource GET handler called\n");
+    LOG_DBG("Sending settings: %s\n", (char *)buffer);
 }
 
 static void res_post_put_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
@@ -149,7 +150,7 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
             coap_set_status_code(response, BAD_REQUEST_4_00);
             return;
         }
-        LOG_DBG("New target temperature: %f\n", new_target_temp);
+        LOG_DBG("New target temperature: %s\n", req_target_temp);
     }
 
     float old_power = conditioner_power;

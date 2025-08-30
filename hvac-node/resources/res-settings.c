@@ -11,7 +11,7 @@
 
 // Conditioner parameters
 #define MIN_POWER 0.0
-#define MAX_POWER 1000.0 // W
+#define MAX_POWER 1500.0 // W
 
 // external resources
 enum status_t {STATUS_OFF, STATUS_VENT, STATUS_COOL, STATUS_HEAT, STATUS_ERROR};

@@ -16,7 +16,7 @@ char* str(float value, char* output);
 #define BATTERY_CAPACITY 10000 // in Wh
 #define DC_AC_COEFF 10.0
 
-static float battery_level = 5000.0; // in Wh
+static float battery_level = 0.0; // in Wh
 float charge_rate = 0.0; // in W
 static unsigned long lastUpdateTime = 0;
 

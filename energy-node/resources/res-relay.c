@@ -12,6 +12,7 @@
 #define MAX_POWER 1500.0 // Maximum flow of power in W
 
 // external resources
+extern coap_endpoint_t hvac_node_endpoint;
 char* str(float value, char* output);
 void updateChargeRate(float rate);
 
@@ -182,6 +183,9 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
     updateBatteryChargeRate(); // Update charge rate based on relay states
 
     coap_set_status_code(response, CHANGED_2_04);
+
+    if(coap_endpoint_cmp(&hvac_node_endpoint, request->src_ep) != 0)
+        res_event_handler(); // Notify observers if the request is from the HVAC (green mode)
 }
 
 static void res_event_handler(void)

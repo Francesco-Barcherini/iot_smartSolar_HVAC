@@ -48,9 +48,12 @@ def print_get_all(data):
     # clear
     print("\033[H\033[J", end='')
 
+    grid_balance = float(data['Grid power balance'])
+    grid_balance_eur = 0.15 * grid_balance
+    grid_color = BRIGHT_GREEN if grid_balance > 0 else BRIGHT_RED if grid_balance < 0 else RESET
     print("STATS:")
-    print(f"  Grid power balance: {data['Grid power balance']}Wh")
-    print(f"  HVAC consumption (1h): {data['HVAC consumption (1h)']}Wh")
+    print(f"  Grid power balance: {round(grid_balance,2)}Wh ({grid_color}{round(grid_balance_eur,2)}€{RESET})")
+    print(f"  HVAC consumption (1h): {round(float(data['HVAC consumption (1h)']),2)}Wh")
     print(f"  Last antidust operation: {data['Last antiDust operation']}")
 
     status = status_map[data['settings']['status']]
@@ -73,7 +76,8 @@ def print_get_all(data):
     lastRoomTemp = roomTemp if abs(roomTemp - lastRoomTemp) > 0.1 else lastRoomTemp
     print(f"ROOM:    {colorRoomTemp}{roomTemp}°C{RESET}")
 
-    antidust = f"{GREEN} antidust on{RESET}" if data['antiDust']['v'] == 1 else ""
+    antidust = f"{GREEN} antidust on{RESET}" if data['antiDust']['v'] == 1 else \
+                f"{BACKGROUND_BRIGHT_RED} antidust alarm{RESET}" if data['antiDust']['v'] == 2 else ""
     modTemp = data['weather']['modTemp']
     irradiation = data['weather']['irr']
     genPower = data['gen_power']['v']
@@ -86,16 +90,14 @@ def print_get_all(data):
     power_sp = data['relay']['p_sp']
     power_h = data['relay']['p_h']
     batteryValue = data['battery']['v']
-    batteryColor = BRIGHT_GREEN if relay_sp == 1 else \
-                    BRIGHT_MAGENTA if relay_h == 1 else \
+    batteryRate = power_sp * (1 if relay_sp == 1 else 0) - power_h * (1 if relay_h == 1 else 0)
+    batteryColor = GREEN if batteryRate > 0 else \
+                    RED if batteryRate < 0 else \
                     RESET
     print("POWER SUPPLY:")
     print(f"  Solar Panel--{power_sp}W-->{SP[relay_sp]}")
     print(f"  HVAC<--{power_h}W--{H[relay_h]}")
     print(f"  Battery: {batteryColor}{batteryValue}Wh{RESET}")
-
-    print(f"OUTSIDE: {outTemp}°C")
-
 
 
 # ========== PERIODIC GET /all ==========
@@ -115,32 +117,33 @@ def periodic_get_all():
                 print("> ", end='', flush=True)
         except Exception as e:
             print(f"[ERROR] Could not fetch /all: {e}")
-        time.sleep(5)
+        time.sleep(3)
 
 # ========== CLI MENU ==========
 
 def send_post(endpoint, json_data):
     try:
         r = requests.post(f"{conf.HTTP_SERVER}/{endpoint}", json=json_data)
-        print(f"[RESPONSE] Status: {r.status_code}, Body: {r.text}")
+        print(f"[RESPONSE] Status: {r.status_code}, {r.text}")
     except Exception as e:
         print(f"[ERROR] POST to /{endpoint}: {e}")
 
 def menu():
     global stop_get_all
     while True:
+        if not stop_get_all: # no print after command execution
+            print("\nChoose an operation:")
+            print("0. Help - print this menu")
+            print("1. Set HVAC status")
+            print("2. Set mode (normal|green)")
+            print("3. Set target temperature")
+            print("4. Set relays state")
+            print("5. Set antidust state")
+            print("6. Set relay settings [CRUD]")
+            print("7. Set HVAC settings [CRUD]")
+            print("8. Dump system state [CRUD]")
+            print("9. Exit")
         stop_get_all = False
-        print("\nChoose an operation:")
-        print("0. Help - print this menu")
-        print("1. Set HVAC status")
-        print("2. Set mode (normal|green)")
-        print("3. Set target temperature")
-        print("4. Set relays state")
-        print("5. Set antidust state")
-        print("6. Set relay settings [CRUD]")
-        print("7. Set HVAC settings [CRUD]")
-        print("8. Dump system state [CRUD]")
-        print("9. Exit")
         choice = input("> ")
 
         if choice == "0":
@@ -182,6 +185,12 @@ def menu():
             stop_get_all = True
             try:
                 v = input("antiDust value (on|off): ")
+                if v == "on":
+                    v = 1
+                elif v == "off":
+                    v = 0
+                else:
+                    raise ValueError("Invalid input")
                 send_post("antiDust", {"n": "antiDust", "v": v})
             except ValueError:
                 print("Invalid input.")
@@ -226,7 +235,7 @@ def menu():
 
 def handle_mqtt_message(client, userdata, message):
     try:
-        payload = json.loads(message.payload.decode())
+        payload = message.payload.decode()
         print(f"{BACKGROUND_BRIGHT_RED}\n[SIGNAL RECEIVED] {message.topic}={payload}{RESET}")
     except Exception as e:
         print(f"[ERROR] Failed to process MQTT message: {e}")

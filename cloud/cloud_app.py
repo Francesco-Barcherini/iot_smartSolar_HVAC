@@ -27,11 +27,13 @@ VENT_POWER = 50.0
 DELTAT_COEFF = 0.0005
 POWER_COEFF = 0.00005
 SECONDS = 60.0
-BATTERY_INTERVAL = 10.0
+BATTERY_INTERVAL = 10.0/3600.0 # hours
 DC_AC_COEFF = 10.0
 BATTERY_CAPACITY = 10000.0  # in Wh
 
-GET_TIME = 5 # seconds
+GET_TIME = 3 # seconds
+
+mq_client = None
 
 def normal_feedback_logic():
     settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
@@ -146,6 +148,7 @@ def notification_callback(url, response):
         return
     payload_raw = None
     try:
+        global mq_client
         # CoAPthon's response.payload can be bytes, decode it to string for JSON parsing
 
         payload_raw = response.payload.decode('utf-8') if isinstance(response.payload, bytes) else response.payload
@@ -200,6 +203,10 @@ def notification_callback(url, response):
             if "n" in payload and payload["n"] == "antiDust" and "v" in payload:
                 HVAC_DB.insert_anti_dust_data(payload["v"])
                 mq_client.publish("antiDust", payload["v"])
+                if payload["v"] == 2:
+                    settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
+                    settings[3] = 2 # set mode to green
+                    HVAC_DB.insert_hvac_data(settings[1], settings[2], settings[3], settings[4])
             else:
                 raise ValueError("Invalid anti-dust data format")
             remote_control_logic("antiDust")
@@ -216,7 +223,7 @@ def notification_callback(url, response):
                     payload["targetTemp"]
                 )
                 if payload["status"] == 4:
-                    mq_client.publish("hvac", "alarm")
+                    mq_client.publish("hvac", "error")
                 global hvac_status, hvac_mode, target_temp
                 hvac_status = int(payload["status"])
                 hvac_mode = int(payload["mode"])
@@ -280,12 +287,6 @@ def get_weather():
     irr = HVAC_DB.get_last_sensor_entries("irr", 1)[0]
     outTemp = HVAC_DB.get_last_sensor_entries("outTemp", 1)[0]
     modTemp = HVAC_DB.get_last_sensor_entries("modTemp", 1)[0]
-    if datetime.now() - irr[3] > timedelta(seconds=GET_TIME) \
-        or datetime.now() - outTemp[3] > timedelta(seconds=GET_TIME) \
-        or datetime.now() - modTemp[3] > timedelta(seconds=GET_TIME):
-        weather_response = client_energy.get(conf.WEATHER_URL)
-        weather_data = json.loads(weather_response.payload) if weather_response.payload else {}
-        return weather_data
     return {
         "irr": irr[2],
         "outTemp": outTemp[2],
@@ -295,7 +296,7 @@ def get_weather():
 def get_v(key):
     data = HVAC_DB.get_last_sensor_entries(key, 1)[0] if key != "antiDust" else HVAC_DB.get_last_entries("AntiDust", 1)[0]
     time_idx = 3 if key != "antiDust" else 2
-    if datetime.now() - data[time_idx] > timedelta(seconds=GET_TIME):
+    if key == "battery" and datetime.now() - data[time_idx] > timedelta(seconds=GET_TIME):
         url_map = {
             "battery": conf.BATTERY_URL,
             "gen_power": conf.GEN_POWER_URL,
@@ -309,28 +310,22 @@ def get_v(key):
 
 def get_relay():
     relay = HVAC_DB.get_last_entries("Relay", 1)[0]
-    if datetime.now() - relay[5] > timedelta(seconds=GET_TIME):
-        relay_response = client_energy.get(conf.RELAY_URL)
-        relay_data = json.loads(relay_response.payload) if relay_response.payload else {}
-        return relay_data
     return {
         "r_sp": relay[1],
         "r_h": relay[2],
         "p_sp": relay[3],
-        "p_h": relay[4]
+        "p_h": relay[4],
+        "timestamp": relay[5]
     }
 
 def get_settings():
     settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
-    if datetime.now() - settings[5] > timedelta(seconds=GET_TIME):
-        settings_response = client_hvac.get(conf.SETTINGS_URL)
-        settings_data = json.loads(settings_response.payload) if settings_response.payload else {}
-        return settings_data
     return {
         "pw": settings[1],
         "status": settings[2],
         "mode": settings[3],
-        "targetTemp": settings[4]
+        "targetTemp": settings[4],
+        "timestamp": settings[5]
     }
 
 
@@ -357,10 +352,17 @@ def get_all_data():
             # Get stats from the DB
             # Total HVAC power consumption of the last hour
             total_power = HVAC_DB.get_total_hvac_power_consumption(3600)
+            #add actual power contribution
+            actual_power = float(data["settings"]["pw"])
+            total_power += actual_power * (datetime.now() - data["settings"]["timestamp"]).total_seconds() / 3600.0
             data["HVAC consumption (1h)"] = total_power        
 
             # Net balance of the last hour of energy sent to the grid
             net_balance = HVAC_DB.get_net_balance(3600)
+            actual_relay = data["relay"]
+            actual_rate = float(actual_relay["p_sp"]) if actual_relay["r_sp"] == 2 else 0.0
+            actual_rate -= float(actual_relay["p_h"]) if actual_relay["r_h"] == 2 else 0.0
+            net_balance += actual_rate * (datetime.now() - actual_relay["timestamp"]).total_seconds() / 3600.0
             data["Grid power balance"] = net_balance        
 
             # Last antiDust operation time
@@ -372,6 +374,7 @@ def get_all_data():
 
         return jsonify(data), 200
     except Exception as e:
+        print(f"Error in /all endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -409,6 +412,7 @@ def set_anti_dust():
     if energy_antiDust != int(payload["v"]):
         HVAC_DB.insert_anti_dust_data(int(payload["v"]))
         energy_antiDust = int(payload["v"])
+        global mq_client
         mq_client.publish("antiDust", energy_antiDust)
     return "AntiDust command accepted", 200
 
@@ -451,7 +455,8 @@ def set_settings():
         target_temp
     )
     if hvac_status == 4:
-        mq_client.publish("hvac", "alarm")
+        global mq_client
+        mq_client.publish("hvac", "error")
     remote_control_logic("settings")
     return "Settings command accepted", 200
     

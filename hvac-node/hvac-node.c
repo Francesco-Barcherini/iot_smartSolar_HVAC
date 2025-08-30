@@ -36,6 +36,7 @@
 #define SHORT_INTERVAL CLOCK_SECOND * 7
 #define BLINK_INTERVAL CLOCK_SECOND * 0.2
 #define GREEN_INTERVAL CLOCK_SECOND * 10
+#define GREEN_HOURS GREEN_INTERVAL / CLOCK_SECOND / 3600.0 // hours
 
 // Power parameters
 #define VENT_POWER 50.0
@@ -60,7 +61,7 @@ extern float target_temp;
 // data from energy node
 float outTemp = 27.5;
 float gen_power = 0.0;
-float battery_level = 5000.0;
+float battery_level = 0.0;
 
 
 static struct etimer green_timer;
@@ -448,7 +449,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 {
                     // try with the battery
                     float dc_needed_power = needed_power * DC_AC_COEFF;
-                    if (dc_needed_power * GREEN_INTERVAL <= battery_level) // battery is enough
+                    if (dc_needed_power * GREEN_HOURS <= battery_level) // battery is enough
                     {
                         snprintf(payload, // Ask needed power to energy node
                             COAP_MAX_CHUNK_SIZE,
@@ -469,12 +470,13 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                                     "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                                     (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(VENT_POWER, buf), str(VENT_POWER, buf2));
                                 conditioner_power = VENT_POWER;
+                                status = STATUS_VENT; // switch to vent
                             }
                             else
                             {
                                 // try with the battery
                                 float dc_needed_power = VENT_POWER * DC_AC_COEFF;
-                                if (dc_needed_power * GREEN_INTERVAL/CLOCK_SECOND <= battery_level) // battery is enough
+                                if (dc_needed_power * GREEN_HOURS <= battery_level) // battery is enough
                                 {
                                     snprintf(payload, // Ask vent power to energy node
                                         COAP_MAX_CHUNK_SIZE,
@@ -510,10 +512,10 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 coap_send_request(&req_state, &energy_node_endpoint, request, client_chunk_handler);
                 LOG_DBG("Green mode request sent: %s\n", payload);
 
+                res_settings.trigger(); // Trigger settings resource update
+
                 // Reset the timer for the next green mode check
                 etimer_reset(&green_timer);
-
-                res_settings.trigger(); // Trigger settings resource update
             }
         }
         // Handle green mode

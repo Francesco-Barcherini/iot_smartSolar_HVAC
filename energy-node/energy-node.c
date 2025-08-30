@@ -17,7 +17,7 @@
 #define LOG_MODULE "ENERGY"
 #define LOG_LEVEL LOG_LEVEL_APP
 
-/* COAP energy-node URL */
+/* COAP hvac-node URL */
 #ifdef COOJA
     #define HVAC_NODE_EP "coap://[fd00::203:3:3:3]:5683"
 #else /*NRF52840*/
@@ -35,8 +35,8 @@
 // Power parameters
 #define MAX_POWER 1500.0 // in W
 #define MAX_OFFSET_PREDICTION 0.2 * MAX_POWER
-#define WRONG_PREDICTIONS_THRESHOLD_DUST 5
-#define WRONG_PREDICTIONS_THRESHOLD_ALARM 10
+#define WRONG_PREDICTIONS_THRESHOLD_DUST 2
+#define WRONG_PREDICTIONS_THRESHOLD_ALARM 4
 
 // Resources
 extern coap_resource_t res_weather, res_battery, res_gen_power, res_relay, res_antiDust;
@@ -66,7 +66,7 @@ struct etimer blink_timer;
 struct etimer sleep_timer;
 
 // CoAP observation
-static coap_endpoint_t hvac_node_endpoint;
+coap_endpoint_t hvac_node_endpoint;
 
 char* str(float value, char* output)
 {

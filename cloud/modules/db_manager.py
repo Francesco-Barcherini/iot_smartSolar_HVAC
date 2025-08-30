@@ -116,7 +116,7 @@ class MySQLDB():
         self.insert_sensor_data('irr', 0.75)
         self.insert_sensor_data('outTemp', 27.5)
         self.insert_sensor_data('modTemp', 40.0)
-        self.insert_sensor_data('battery', 5000.0)
+        self.insert_sensor_data('battery', 0.0)
         self.insert_relay_data(1, 2, 0.0, 0.0)
         self.insert_anti_dust_data(0)
         self.insert_hvac_data(0.0, 0, 0, 27.5)
@@ -151,7 +151,7 @@ class MySQLDB():
             cursor = connection.cursor()
             cursor.execute(f"""
                 SELECT
-                    SUM(power * TIMESTAMPDIFF(SECOND, prev_timestamp, timestamp)) AS total_energy_consumption
+                    SUM(power * TIMESTAMPDIFF(SECOND, prev_timestamp, timestamp) / 3600) AS total_energy_consumption
                 FROM (
                     SELECT
                         power,
@@ -185,7 +185,7 @@ class MySQLDB():
                     SUM(
                         (CASE WHEN solar_to = 2 THEN power_solar ELSE 0 END -
                         CASE WHEN house_from = 2 THEN power_home ELSE 0 END)
-                        * TIMESTAMPDIFF(SECOND, prev_timestamp, timestamp)
+                        * TIMESTAMPDIFF(SECOND, prev_timestamp, timestamp) / 3600
                     ) AS total_net_energy_consumption
                 FROM (
                     SELECT

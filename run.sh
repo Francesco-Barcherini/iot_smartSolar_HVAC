@@ -63,7 +63,7 @@ function run_cloud(){
     local target=$1
     local newdb=$2
     echo "Starting cloud application..."
-    gnome-terminal --tab --active -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default'
+    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default;'
     echo "Cloud application started successfully!"
 
     echo "Press any key to start the HTTP server and User application..."
@@ -123,7 +123,6 @@ case $1 in
         run_rpl_border_router $2
         ;;
     cloud_app)
-        run_user_app
         run_cloud $2 $3
         ;;
     # sim)
@@ -166,6 +165,8 @@ case $1 in
         echo "Press any key to start the cloud application..."
         read -n 1 -s
         run_cloud $2 $3
+        echo "Press any key to login to the serial output of the dongles..."
+        read -n 1 -s
         login
         ;;
     *)

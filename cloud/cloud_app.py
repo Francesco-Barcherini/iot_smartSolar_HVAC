@@ -22,6 +22,7 @@ import mysql.connector
 from modules.db_manager import HVAC_DB
 from modules.mqtt_manager import get_mqtt_client
 import config.app_config as conf
+from modules.colors import *
 
 VENT_POWER = 50.0
 DELTAT_COEFF = 0.0005
@@ -205,7 +206,8 @@ def notification_callback(url, response):
                 mq_client.publish("antiDust", payload["v"])
                 if payload["v"] == 2:
                     settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
-                    settings[3] = 2 # set mode to green
+                    settings = list(settings)
+                    settings[3] = 1  # set mode to green
                     HVAC_DB.insert_hvac_data(settings[1], settings[2], settings[3], settings[4])
             else:
                 raise ValueError("Invalid anti-dust data format")
@@ -260,25 +262,25 @@ def stop_observation(client, url):
 def start_all_observations():
     print("Starting observations for all sensors...")
     # Start observations
-    start_observation(client_energy, conf.WEATHER_URL)
-    start_observation(client_energy, conf.BATTERY_URL)
-    start_observation(client_energy, conf.GEN_POWER_URL)
-    start_observation(client_energy, conf.RELAY_URL)
-    start_observation(client_energy, conf.ANTI_DUST_URL)
-    start_observation(client_hvac, conf.ROOM_TEMP_URL)
-    start_observation(client_hvac, conf.SETTINGS_URL)
+    start_observation(client_energy_WEATHER, conf.WEATHER_URL)
+    start_observation(client_energy_BATTERY, conf.BATTERY_URL)
+    start_observation(client_energy_GEN_POWER, conf.GEN_POWER_URL)
+    start_observation(client_energy_RELAY, conf.RELAY_URL)
+    start_observation(client_energy_ANTI_DUST, conf.ANTI_DUST_URL)
+    start_observation(client_hvac_ROOM_TEMP, conf.ROOM_TEMP_URL)
+    start_observation(client_hvac_SETTINGS, conf.SETTINGS_URL)
     print("All observations started successfully.")
 
 def stop_all_observations():
     print("Stopping observations for all sensors...")
     # Stop observations
-    stop_observation(client_energy, conf.WEATHER_URL)
-    stop_observation(client_energy, conf.BATTERY_URL)
-    stop_observation(client_energy, conf.GEN_POWER_URL)
-    stop_observation(client_energy, conf.RELAY_URL)
-    stop_observation(client_energy, conf.ANTI_DUST_URL)
-    stop_observation(client_hvac, conf.ROOM_TEMP_URL)
-    stop_observation(client_hvac, conf.SETTINGS_URL)
+    stop_observation(client_energy_WEATHER, conf.WEATHER_URL)
+    stop_observation(client_energy_BATTERY, conf.BATTERY_URL)
+    stop_observation(client_energy_GEN_POWER, conf.GEN_POWER_URL)
+    stop_observation(client_energy_RELAY, conf.RELAY_URL)
+    stop_observation(client_energy_ANTI_DUST, conf.ANTI_DUST_URL)
+    stop_observation(client_hvac_ROOM_TEMP, conf.ROOM_TEMP_URL)
+    stop_observation(client_hvac_SETTINGS, conf.SETTINGS_URL)
     print("All observations stopped successfully.")
 
 app = Flask(__name__)
@@ -468,9 +470,23 @@ print('Starting CoAP client...')
 if '--cooja' in sys.argv:
     client_energy = HelperClient((conf.COOJA_ENERGY_IP, conf.COAP_PORT), None, None, None)
     client_hvac = HelperClient((conf.COOJA_HVAC_IP, conf.COAP_PORT), None, None, None)
+    client_energy_WEATHER = HelperClient((conf.COOJA_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_energy_BATTERY = HelperClient((conf.COOJA_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_energy_GEN_POWER = HelperClient((conf.COOJA_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_energy_RELAY = HelperClient((conf.COOJA_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_energy_ANTI_DUST = HelperClient((conf.COOJA_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_hvac_ROOM_TEMP = HelperClient((conf.COOJA_HVAC_IP, conf.COAP_PORT), None, None, None)
+    client_hvac_SETTINGS = HelperClient((conf.COOJA_HVAC_IP, conf.COAP_PORT), None, None, None)
 else:
     client_energy = HelperClient((conf.DONGLE_ENERGY_IP, conf.COAP_PORT), None, None, None)
     client_hvac = HelperClient((conf.DONGLE_HVAC_IP, conf.COAP_PORT), None, None, None)
+    client_energy_WEATHER = HelperClient((conf.DONGLE_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_energy_BATTERY = HelperClient((conf.DONGLE_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_energy_GEN_POWER = HelperClient((conf.DONGLE_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_energy_RELAY = HelperClient((conf.DONGLE_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_energy_ANTI_DUST = HelperClient((conf.DONGLE_ENERGY_IP, conf.COAP_PORT), None, None, None)
+    client_hvac_ROOM_TEMP = HelperClient((conf.DONGLE_HVAC_IP, conf.COAP_PORT), None, None, None)
+    client_hvac_SETTINGS = HelperClient((conf.DONGLE_HVAC_IP, conf.COAP_PORT), None, None, None)
 
 if __name__ == "__main__":
     # arguments: --new-db --cooja

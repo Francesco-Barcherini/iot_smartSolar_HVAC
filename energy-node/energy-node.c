@@ -29,8 +29,8 @@
 // Publish intervals
 #define LONG_INTERVAL CLOCK_SECOND * 15
 #define SHORT_INTERVAL CLOCK_SECOND * 7
-#define ANTIDUST_INTERVAL CLOCK_SECOND * 10
-#define BLINK_INTERVAL CLOCK_SECOND * 0.2
+#define ANTIDUST_INTERVAL CLOCK_SECOND * 5
+#define BLINK_INTERVAL CLOCK_SECOND * 0.1
 
 // Power parameters
 #define MAX_POWER 1500.0 // in W
@@ -324,7 +324,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
             char payload[COAP_MAX_CHUNK_SIZE], buf1[16], buf2[16];
             snprintf(payload, COAP_MAX_CHUNK_SIZE, 
                 "pw=%s&status=%s&mode=%s&targetTemp=%s",
-                "0.0", "same", "green", "-1.0");
+                "-1.0", "same", "green", "-1.0");
             //coap_set_header_content_format(request, TEXT_PLAIN);
             
             coap_set_payload(request, (uint8_t *) payload, strlen(payload));
@@ -357,17 +357,17 @@ PROCESS_THREAD(energy_node_process, ev, data)
         } 
         else if (ev == button_hal_periodic_event) {
             button_hal_button_t* btn = (button_hal_button_t*) data;
-            if(btn->press_duration_seconds == 3) 
+            if(btn->press_duration_seconds == 2) 
             {
                 long_press = true;
                 if (energyNodeStatus == STATUS_ALARM)
                 {
-                    LOG_WARN("Button pressed for 3s: RESTART\n");
+                    LOG_WARN("Button pressed for 2s: RESTART\n");
                     restart();
                 }
                 else
                 {
-                    LOG_WARN("Button pressed for 3s: ALARM\n");
+                    LOG_WARN("Button pressed for 2s: ALARM\n");
                     alarm_handler();
                 }
             }

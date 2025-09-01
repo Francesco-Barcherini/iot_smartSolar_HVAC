@@ -16,7 +16,7 @@ class MySQLDB():
             pool_size=5,
             **db_config
         )
-        print("Connected to database ", self._connection_pool)
+        print("Connected to database", app_config.DB_NAME)
 
     def reset_db(self):
         print('Resetting Database')

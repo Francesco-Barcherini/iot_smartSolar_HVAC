@@ -546,9 +546,9 @@ PROCESS_THREAD(hvac_node_process, ev, data)
 #if PLATFORM_HAS_BUTTON
         else if (ev == button_hal_periodic_event) {
             button_hal_button_t* btn = (button_hal_button_t*) data;
-            if(btn->press_duration_seconds == 3) 
+            if(btn->press_duration_seconds == 2) 
             {
-                LOG_DBG("Button pressed for 3 seconds, toggling ERROR status.\n");
+                LOG_DBG("Button pressed for 2 seconds, toggling ERROR status.\n");
                 //long_press = true;
                 // toggle ERROR status
                 if (status == STATUS_ERROR) {

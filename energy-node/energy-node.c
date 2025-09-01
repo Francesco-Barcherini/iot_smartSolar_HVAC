@@ -81,67 +81,56 @@ char* str(float value, char* output)
 PROCESS(energy_node_process, "Energy Node Process");
 AUTOSTART_PROCESSES(&energy_node_process);
 
-process_event_t send_green_setting_event;
-
 static void alarm_handler()
 {
     energyNodeStatus = STATUS_ALARM;
-
     update_antiDust(ANTIDUST_ALARM); // Disable anti-dust mode
-    res_antiDust.trigger();
     
     res_gen_power.trigger();
 
-    updateChargeRate(0.0); // Stop charging
-
     // relay control
-    update_relay(RELAY_SP_GRID, RELAY_HOME_GRID, gen_power, -1.0);
+    update_relay(RELAY_SP_GRID, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
 
-    process_post(&energy_node_process, send_green_setting_event, NULL);
+    res_antiDust.trigger();
 }
 
 static void restart()
 {
     energyNodeStatus = STATUS_ON;
-
     update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
-    res_antiDust.trigger();
     
     res_gen_power.trigger();
-
-    updateChargeRate(0.0); // Stop charging
 
     // relay control
     update_relay(RELAY_SP_GRID, RELAY_HOME_GRID, gen_power, -1.0);
     res_relay.trigger();
+
+    res_antiDust.trigger();
 }
 
 static void antidust_handler()
 {
     energyNodeStatus = STATUS_ANTIDUST;
+    update_antiDust(ANTIDUST_ON); // Enable anti-dust mode
 
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
     etimer_set(&blink_timer, BLINK_INTERVAL);
 #endif
 
-    update_antiDust(ANTIDUST_ON); // Enable anti-dust mode
-    res_antiDust.trigger();
-
     res_gen_power.trigger();
-
-    updateChargeRate(0.0); // Stop charging
 
     // relay control
     update_relay(RELAY_SP_BATTERY, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
 
-    process_post(&energy_node_process, send_green_setting_event, NULL);
+    res_antiDust.trigger();
 }
 
 static void end_antidust_handler()
 {
     energyNodeStatus = STATUS_ON;
+    update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
 
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
     etimer_stop(&blink_timer);
@@ -150,16 +139,14 @@ static void end_antidust_handler()
     else
         leds_single_off(LEDS_YELLOW); // Turn off yellow LED
 #endif
-    update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
-    res_antiDust.trigger();
 
     res_gen_power.trigger();
-
-    updateChargeRate(0.0); // Stop charging
 
     // relay control
     update_relay(RELAY_SP_GRID, RELAY_HOME_GRID, 0.0, -1.0);
     res_relay.trigger();
+
+    res_antiDust.trigger();
 }
 
 static void analyze_prediction(float prediction)
@@ -225,7 +212,6 @@ PROCESS_THREAD(energy_node_process, ev, data)
     LOG_DBG("Starting energy node\n");
 
     //setlocale(LC_NUMERIC, "C");
-    send_green_setting_event = process_alloc_event();
 
     // Initialize resources
     coap_activate_resource(&res_weather, "sensors/weather");
@@ -313,25 +299,6 @@ PROCESS_THREAD(energy_node_process, ev, data)
                     etimer_reset(&blink_timer);
                 }
             }
-        }
-        else if (ev == send_green_setting_event)
-        {
-            coap_message_t request[1];
-            coap_init_message(request, COAP_TYPE_CON, COAP_POST, 0);
-            coap_set_header_uri_path(request, SETTINGS_URI);
-
-            // Prepare payload
-            char payload[COAP_MAX_CHUNK_SIZE], buf1[16], buf2[16];
-            snprintf(payload, COAP_MAX_CHUNK_SIZE, 
-                "pw=%s&status=%s&mode=%s&targetTemp=%s",
-                "-1.0", "same", "green", "-1.0");
-            //coap_set_header_content_format(request, TEXT_PLAIN);
-            
-            coap_set_payload(request, (uint8_t *) payload, strlen(payload));
-            
-            // Send request
-            LOG_DBG("Sending green mode: %s\n", payload);
-            coap_send_request(&req_state, &hvac_node_endpoint, request, client_chunk_handler);
         }
 
         // Handle button events

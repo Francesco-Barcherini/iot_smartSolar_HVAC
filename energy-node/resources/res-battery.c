@@ -20,6 +20,8 @@ static float battery_level = 0.0; // in Wh
 float charge_rate = 0.0; // in W
 static unsigned long lastUpdateTime = 0;
 
+static void res_event_handler(void);
+
 static void update_battery_level()
 {
     if (lastUpdateTime == 0.0)
@@ -44,16 +46,6 @@ static void update_battery_level()
         char level[16];
         LOG_INFO("Battery level updated: %s Wh\n", str(battery_level, level));
     }
-}
-
-// callable from outside
-void updateChargeRate(float rate)
-{
-    update_battery_level();
-    charge_rate = rate;
-
-    char charge_rate_str[16];
-    LOG_INFO("Charge rate set to: %s W\n", str(charge_rate, charge_rate_str));
 }
 
 void battery_json_string(char* buffer)
@@ -97,4 +89,17 @@ static void res_event_handler(void)
     coap_notify_observers(&res_battery);
 
     LOG_DBG("Battery resource event handler called\n");
+}
+
+void updateChargeRate(float rate)
+{
+    update_battery_level();
+    // Notify observers
+    if (charge_rate != 0.0 && 
+        (battery_level < 0.2 * BATTERY_CAPACITY || battery_level > 0.8 * BATTERY_CAPACITY))
+        coap_notify_observers(&res_battery);
+    charge_rate = rate;
+
+    char charge_rate_str[16];
+    LOG_INFO("Charge rate set to: %s W\n", str(charge_rate, charge_rate_str));
 }

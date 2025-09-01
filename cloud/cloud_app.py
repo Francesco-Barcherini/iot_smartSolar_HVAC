@@ -111,36 +111,9 @@ def remote_control_logic(component):
         if component != "roomTemp" and (hvac_status == 0 or hvac_status == 4): # hvac off
             handle_energy_with_hvac_down(component == "gen_power")
             return
-        if energy_antiDust == 0 and hvac_status not in [0,4] and hvac_mode == 0: # hvac on and normal mode
+        if hvac_status not in [0,4] and hvac_mode == 0: # hvac on and normal mode
             normal_feedback_logic()
         # if error or green -> do nothing
-    elif component == "antiDust":
-        if energy_antiDust == 1 or energy_antiDust == 2:
-            if hvac_status == 0 or hvac_status == 4:
-                print("AntiDust during inactivity")
-                return
-            # try the battery
-            battery_power = HVAC_DB.get_last_sensor_entries("battery", 1)[0][2]
-            cons_pw = HVAC_DB.get_last_entries("HVAC", 1)[0][2]
-            dc_needed_power = cons_pw * DC_AC_COEFF
-            if dc_needed_power * BATTERY_INTERVAL <= battery_power:
-                print("Using battery power for AntiDust")
-                HVAC_DB.insert_relay_data(2, 1, 0.0, cons_pw)
-                HVAC_DB.insert_hvac_data(cons_pw, hvac_status, 0, target_temp)
-                energy_payload = f'r_sp=2&r_h=1&p_sp=0.0&p_h={cons_pw}'
-                hvac_payload = f'pw={cons_pw}&status=same&mode=normal&targetTemp=-1.0'
-                client_energy.put(conf.RELAY_URL, energy_payload)
-                client_hvac.put(conf.SETTINGS_URL, hvac_payload)
-            else:
-                # attach to grid
-                print("Using grid power for AntiDust")
-                HVAC_DB.insert_relay_data(2, 2, 0.0, cons_pw)
-                HVAC_DB.insert_hvac_data(cons_pw, hvac_status, 0, target_temp)
-                energy_payload = f'r_sp=2&r_h=2&p_sp=0.0&p_h={cons_pw}'
-                hvac_payload = f'pw={cons_pw}&status=same&mode=normal&targetTemp=-1.0'
-                client_energy.put(conf.RELAY_URL, energy_payload)
-                client_hvac.put(conf.SETTINGS_URL, hvac_payload)
-
 
 def notification_callback(url, response):
     #print(f"Notification received from {url}")
@@ -211,7 +184,6 @@ def notification_callback(url, response):
                     HVAC_DB.insert_hvac_data(settings[1], settings[2], settings[3], settings[4])
             else:
                 raise ValueError("Invalid anti-dust data format")
-            remote_control_logic("antiDust")
 
         elif data_type == "settings":
             # Process HVAC data: "{\"n\":\"settings\",\"pw\":%s,\"status\":%d,\"mode\":%d,\"targetTemp\":%s}",
@@ -435,6 +407,7 @@ MODE_MAP = {
 def set_settings():
     payload = request.get_json()
     try:
+        payload["pw"] = 0.0 if payload["status"] == "off" else payload["pw"]
         coap_payload = f'pw={payload["pw"]}&status={payload["status"]}&mode={payload["mode"]}&targetTemp={payload["targetTemp"]}'
         client_hvac.put(conf.SETTINGS_URL, coap_payload)
     except Exception as e:

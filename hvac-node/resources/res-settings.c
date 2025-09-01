@@ -97,16 +97,6 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
         req_target_temp[len] = '\0'; // Null-terminate the string
     }
 
-    if (req_pw != NULL) {
-        new_power = atof(req_pw);
-        if (new_power != -1.0 && (new_power < MIN_POWER || new_power > MAX_POWER)) {
-            LOG_ERR("Invalid power value: %s\n", req_pw);
-            coap_set_status_code(response, BAD_REQUEST_4_00);
-            return;
-        }
-        LOG_DBG("New power: %s\n", req_pw);
-    }
-
     if (req_status != NULL) {
         if (strcmp(req_status, "off") == 0) {
             new_status = STATUS_OFF;
@@ -126,6 +116,21 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
             return;
         }
         LOG_DBG("New status: %d\n", new_status);
+    }
+
+    if (req_pw != NULL) {
+        new_power = atof(req_pw);
+        if (new_power != -1.0 && (new_power < MIN_POWER || new_power > MAX_POWER)) {
+            LOG_ERR("Invalid power value: %s\n", req_pw);
+            coap_set_status_code(response, BAD_REQUEST_4_00);
+            return;
+        }
+        if (new_power != 0.0 && new_status == STATUS_OFF) {
+            LOG_ERR("Cannot set power to %s!=0.0 when status is off\n", req_pw);
+            coap_set_status_code(response, BAD_REQUEST_4_00);
+            return;
+        }
+        LOG_DBG("New power: %s\n", req_pw);
     }
 
     if (req_mode != NULL) {

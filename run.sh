@@ -159,6 +159,9 @@ case $1 in
     flash)
         flash
         ;;
+    login)
+        login
+        ;;
     deploy)
         echo "Starting deployment..."
         run_rpl_border_router

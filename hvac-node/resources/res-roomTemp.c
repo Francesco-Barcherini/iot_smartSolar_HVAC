@@ -19,7 +19,7 @@
 // Temperature parameters
 #define DELTAT_COEFF 0.0005
 #define POWER_COEFF 0.00005
-#define MAX_RANDOM_OFFSET 0.2
+#define MAX_RANDOM_OFFSET 0.1
 #define MIN_TEMP 15.0
 #define MAX_TEMP 40.0
 

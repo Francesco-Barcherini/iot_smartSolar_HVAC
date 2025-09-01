@@ -396,10 +396,15 @@ PROCESS_THREAD(hvac_node_process, ev, data)
             //     }
             // }
             else if (data == &green_timer) {
-                if (status == STATUS_OFF || status == STATUS_ERROR || 
-                    cond_mode != MODE_GREEN) {
-                    LOG_ERR("Cannot start green mode, HVAC is off or in error state.\n");
+                if (cond_mode != MODE_GREEN) {
+                    LOG_ERR("Green mode started but mode is not green.\n");
                     handle_stop();
+                    continue;
+                }
+
+                if (status == STATUS_OFF || status == STATUS_ERROR) {
+                    LOG_INFO("Cannot start green mode, HVAC is off or in error state.\n");
+                    etimer_reset(&green_timer);
                     continue;
                 }
 
@@ -412,9 +417,12 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 }
 
                 float needed_power;
+                bool green_vent = false;
 
-                if (status == STATUS_VENT)
+                if (status == STATUS_VENT) {
                     needed_power = VENT_POWER;
+                    green_vent = true;
+                }
                 else
                 {
                     needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF;
@@ -470,7 +478,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                                     "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                                     (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(VENT_POWER, buf), str(VENT_POWER, buf2));
                                 conditioner_power = VENT_POWER;
-                                status = STATUS_VENT; // switch to vent
+                                green_vent = true;
                             }
                             else
                             {
@@ -483,13 +491,14 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                                         "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                                         (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(VENT_POWER, buf2));
                                         conditioner_power = VENT_POWER;
+                                        green_vent = true;
                                 }
                                 else // not enough in any case
                                 {
                                     snprintf(payload, // Ask vent power to energy node
                                         COAP_MAX_CHUNK_SIZE,
                                         "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
-                                        (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(0.0, buf), str(0.0, buf2));
+                                        (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(0.0, buf2));
                                         conditioner_power = 0.0;
                                 }
                             }
@@ -499,11 +508,14 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                             snprintf(payload, // Ask vent power to energy node
                                 COAP_MAX_CHUNK_SIZE,
                                 "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
-                                (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(0.0, buf), str(0.0, buf2));
+                                (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(0.0, buf2));
                                 conditioner_power = 0.0;
                         }
                     }
                 }
+                enum status_t actual_status = status;
+                status = green_vent ? STATUS_VENT : status;
+
                 char power_str[16], target_temp_str[16];
                 LOG_INFO("New settings: power=%s, status=%d, mode=%d, targetTemp=%s\n",
                 str(conditioner_power, power_str), status, cond_mode, str(target_temp, target_temp_str));
@@ -513,9 +525,9 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 LOG_DBG("Green mode request sent: %s\n", payload);
 
                 res_settings.trigger(); // Trigger settings resource update
+                status = actual_status;
 
                 // Reset the timer for the next green mode check
-                etimer_reset(&green_timer);
             }
         }
         // Handle green mode

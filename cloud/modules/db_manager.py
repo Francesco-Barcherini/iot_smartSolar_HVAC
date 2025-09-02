@@ -126,7 +126,7 @@ class MySQLDB():
         try:
             connection = self._connection_pool.get_connection()
             cursor = connection.cursor()
-            cursor.execute(f'SELECT * FROM {table} ORDER BY timestamp DESC LIMIT {num}')
+            cursor.execute(f'SELECT * FROM {table} ORDER BY id DESC LIMIT {num}')
             return cursor.fetchall()
         finally:
             cursor.close()
@@ -136,7 +136,7 @@ class MySQLDB():
         try:
             connection = self._connection_pool.get_connection()
             cursor = connection.cursor()
-            cursor.execute(f'SELECT * FROM Sensors WHERE sensor = "{sensor}" ORDER BY timestamp DESC LIMIT {num}')
+            cursor.execute(f'SELECT * FROM Sensors WHERE sensor = "{sensor}" ORDER BY id DESC LIMIT {num}')
             return cursor.fetchall()
         finally:
             cursor.close()
@@ -156,7 +156,7 @@ class MySQLDB():
                     SELECT
                         power,
                         timestamp,
-                        LAG(timestamp) OVER (ORDER BY timestamp) AS prev_timestamp
+                        LAG(timestamp) OVER (ORDER BY id) AS prev_timestamp
                     FROM
                         HVAC
                     WHERE
@@ -194,7 +194,7 @@ class MySQLDB():
                         solar_to,
                         power_home,
                         house_from,
-                        LAG(timestamp) OVER (ORDER BY timestamp) AS prev_timestamp
+                        LAG(timestamp) OVER (ORDER BY id) AS prev_timestamp
                     FROM
                         Relay
                     WHERE

@@ -457,7 +457,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 {
                     // try with the battery
                     float dc_needed_power = needed_power * DC_AC_COEFF;
-                    if (dc_needed_power * GREEN_HOURS <= battery_level) // battery is enough
+                    if (dc_needed_power * GREEN_HOURS <= battery_level - 50.0) // battery is enough
                     {
                         snprintf(payload, // Ask needed power to energy node
                             COAP_MAX_CHUNK_SIZE,
@@ -528,6 +528,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 status = actual_status;
 
                 // Reset the timer for the next green mode check
+                etimer_reset(&green_timer);
             }
         }
         // Handle green mode

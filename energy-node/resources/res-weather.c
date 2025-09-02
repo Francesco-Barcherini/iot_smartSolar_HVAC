@@ -8,7 +8,7 @@
 // Solar Power Prediction
 #include "../solar-power-model.h"
 #define NUM_INPUT 3
-#define MAX_POWER 1500.0
+#define MAX_POWER 3000.0
 
 #include "sys/log.h"
 #define LOG_MODULE "WEATH"

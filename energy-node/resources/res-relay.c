@@ -9,7 +9,7 @@
 #define LOG_MODULE "RELAY"
 #define LOG_LEVEL LOG_LEVEL_APP
 
-#define MAX_POWER 1500.0 // Maximum flow of power in W
+#define MAX_POWER 3000.0 // Maximum flow of power in W
 
 // external resources
 extern coap_endpoint_t hvac_node_endpoint;

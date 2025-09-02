@@ -69,7 +69,7 @@ def normal_feedback_logic():
         # try battery
         dc_needed_power = needed_power * DC_AC_COEFF
         rel_sp = 1 if battery_power < 0.9 * BATTERY_CAPACITY else 2
-        if dc_needed_power * BATTERY_INTERVAL <= battery_power:
+        if dc_needed_power * BATTERY_INTERVAL <= battery_power - 50.0:
             print("Using battery power")
             HVAC_DB.insert_relay_data(rel_sp, 1, gen_power, needed_power)
             HVAC_DB.insert_hvac_data(needed_power, hvac_status, hvac_mode, target_temp)
@@ -96,7 +96,7 @@ def handle_energy_with_hvac_down(is_gen_power):
         print("No change in relay state needed")
         return
     rel_sp = new_rel_sp 
-    HVAC_DB.insert_relay_data(rel_sp, 0, gen_power, 0.0)
+    HVAC_DB.insert_relay_data(rel_sp, 2, gen_power, 0.0)
     energy_payload = f'r_sp={rel_sp}&r_h=2&p_sp={gen_power}&p_h=0.0'
     client_energy.put(conf.RELAY_URL, energy_payload)
 
@@ -177,11 +177,6 @@ def notification_callback(url, response):
             if "n" in payload and payload["n"] == "antiDust" and "v" in payload:
                 HVAC_DB.insert_anti_dust_data(payload["v"])
                 mq_client.publish("antiDust", payload["v"])
-                if payload["v"] == 2:
-                    settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
-                    settings = list(settings)
-                    settings[3] = 1  # set mode to green
-                    HVAC_DB.insert_hvac_data(settings[1], settings[2], settings[3], settings[4])
             else:
                 raise ValueError("Invalid anti-dust data format")
 
@@ -198,10 +193,6 @@ def notification_callback(url, response):
                 )
                 if payload["status"] == 4:
                     mq_client.publish("hvac", "error")
-                global hvac_status, hvac_mode, target_temp
-                hvac_status = int(payload["status"])
-                hvac_mode = int(payload["mode"])
-                target_temp = float(payload["targetTemp"])
             else:
                 raise ValueError("Invalid HVAC data format")
             remote_control_logic("settings")
@@ -474,12 +465,18 @@ if __name__ == "__main__":
     if '--default' in sys.argv:
         HVAC_DB.insert_default()
 
-    # start a mosquitto broker
-    print('Starting Mosquitto broker...')
+# start a mosquitto broker
+print('Checking Mosquitto broker status...')
+status = os.system('systemctl is-active --quiet mosquitto.service')
+if status != 0:
+    print('Mosquitto broker is not active. Restarting...')
     os.system('sudo systemctl restart mosquitto.service')
-    print('Mosquitto broker restarted')
-    mq_client = get_mqtt_client()
-    
+else:
+    print('Mosquitto broker is already active.')
+mq_client = get_mqtt_client()
+print('Mosquitto broker setup completed')
+
+if __name__ == "__main__":    
     threading.Thread(target=start_all_observations, daemon=True).start()
     print('CoAP client started')
 

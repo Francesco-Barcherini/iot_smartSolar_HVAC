@@ -13,7 +13,7 @@
 
 // Conditioner parameters
 #define MIN_POWER 0.0
-#define MAX_POWER 1500.0 // W
+#define MAX_POWER 3000.0 // W
 
 // T_new = T_old + (deltaT * c1 - power * c2) * elapsed_time
 // Temperature parameters

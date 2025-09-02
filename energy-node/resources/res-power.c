@@ -15,9 +15,9 @@ enum status_t {STATUS_ON, STATUS_ANTIDUST, STATUS_ALARM};
 extern enum status_t energyNodeStatus;
 
 // Generated power parameters
-#define MAX_POWER 1500.0 // in W
-#define MAX_OFFSET_PREDICTION 0.2 * MAX_POWER
-#define MAX_STEP 0.01 * MAX_POWER
+#define MAX_POWER 3000.0 // in W
+#define MAX_OFFSET_PREDICTION 0.1 * MAX_POWER
+#define MAX_STEP 0.005 * MAX_POWER
 
 float gen_power = 0.0; // in W
 

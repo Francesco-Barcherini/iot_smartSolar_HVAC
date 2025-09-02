@@ -19,8 +19,7 @@ char* str(float value, char* output);
 static float battery_level = 0.0; // in Wh
 float charge_rate = 0.0; // in W
 static unsigned long lastUpdateTime = 0;
-
-static void res_event_handler(void);
+static unsigned long lastNotificationTime = 0;
 
 static void update_battery_level()
 {
@@ -95,9 +94,16 @@ void updateChargeRate(float rate)
 {
     update_battery_level();
     // Notify observers
+    lastNotificationTime = lastNotificationTime == 0 ? clock_seconds() : lastNotificationTime;
+    unsigned long currentTime = clock_seconds();
     if (charge_rate != 0.0 && 
-        (battery_level < 0.2 * BATTERY_CAPACITY || battery_level > 0.8 * BATTERY_CAPACITY))
-        coap_notify_observers(&res_battery);
+        (battery_level < 0.1 * BATTERY_CAPACITY || battery_level > 0.9 * BATTERY_CAPACITY)) {
+        if (currentTime - lastNotificationTime > 2) {
+            coap_notify_observers(&res_battery);
+            lastNotificationTime = currentTime;
+        }
+    }
+        
     charge_rate = rate;
 
     char charge_rate_str[16];

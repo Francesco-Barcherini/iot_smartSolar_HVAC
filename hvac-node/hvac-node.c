@@ -82,6 +82,7 @@ char* str(float value, char* output)
 {
     int integer = (int) value;
     float fraction = value - integer;
+    fraction = fraction < 0 ? -fraction : fraction; // abs
     int fraction_int = (int)(fraction * 100);
     snprintf(output, 16, "%d.%d", integer, fraction_int);
     return output;
@@ -176,6 +177,9 @@ void get_value_from_json(const uint8_t *json, int len)
     char value_buf[16] = {0};
     bool found_name = false;
 
+    // Log the json
+    LOG_INFO("Received JSON: %.*s\n", len, (char *)json);
+
     while((next = jsonparse_next(&state)) != JSON_TYPE_ERROR) {
         if(next == JSON_TYPE_PAIR_NAME) {
             jsonparse_copy_value(&state, key, sizeof(key));
@@ -248,9 +252,6 @@ static void notification_callback(coap_observee_t* obs, void* notification, coap
             LOG_ERR("HVAC system in error state.\n");
             break;
         case ERROR_RESPONSE_CODE:
-            LOG_WARN("%s sent error code: %*s\n", obs->url, len, (char *)payload);
-            LOG_ERR("HVAC system in error state.\n");
-            break;
         case NO_REPLY_FROM_SERVER:
             LOG_WARN("%s did not reply: "
                     "removing observe registration with token %x%x\n",
@@ -308,22 +309,8 @@ void stop_observation_gen_power()
     observing[2] = false;
 }
 
-void
-client_chunk_handler(coap_callback_request_state_t *state)
-{
-
-  coap_message_t *response = state->state.response;
-
-  const uint8_t *chunk;
-
-  if(response == NULL) {
-    puts("Request timed out");
+void client_chunk_handler(coap_callback_request_state_t *state){
     return;
-  }
-
-//   int len = coap_get_payload(response, &chunk);
-
-//   printf("|%.*s", len, (char *)chunk);
 }
 
 static coap_callback_request_state_t req_state;
@@ -355,13 +342,10 @@ PROCESS_THREAD(hvac_node_process, ev, data)
     green_start_event = process_alloc_event();
     restart_obs = process_alloc_event();
 
-    // Initialize observations
-    start_observation_weather();
-
     // Wait connection
     while (!coap_endpoint_is_connected(&energy_node_endpoint)) {
             LOG_DBG("Waiting for connection to energy node...\n");
-            etimer_set(&sleep_timer, CLOCK_SECOND * 2);
+            etimer_set(&sleep_timer, CLOCK_SECOND * 0.5);
             PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&sleep_timer));
             #if PLATFORM_HAS_LEDS || LEDS_COUNT
                 leds_toggle(LEDS_RED);
@@ -372,6 +356,9 @@ PROCESS_THREAD(hvac_node_process, ev, data)
     #if PLATFORM_HAS_LEDS || LEDS_COUNT
         leds_on(LEDS_RED);
     #endif
+
+    // Initialize observations
+    start_observation_weather();
 
     // Initialize timers
     etimer_set(&rootTemp_timer, SHORT_INTERVAL);
@@ -425,17 +412,26 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 }
                 else
                 {
-                    needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF;
-                    needed_power /= POWER_COEFF;
-                    if (status == STATUS_COOL)
-                        needed_power = -needed_power; // Cool mode uses negative power
-
-                    if (needed_power < 0.0)
-                        needed_power = 0.0; // No need for power if cooling is not needed
+                    if ((status == STATUS_COOL && roomTemp <= target_temp)
+                        || (status == STATUS_HEAT && roomTemp >= target_temp)) 
+                    {
+                        LOG_INFO("Target temperature reached, HVAC suspended\n");
+                        needed_power = 0.0;
+                    } 
+                    else 
+                    {
+                        needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF;
+                        needed_power /= POWER_COEFF;
+                        if (status == STATUS_COOL)
+                            needed_power = -needed_power; // Cool mode uses negative power
+    
+                        if (needed_power < 0.0)
+                            needed_power = 0.0; // No need for power if cooling is not needed
+                    }
                 }
 
                 char needed_power_str[16], gen_power_str[16], battery_level_str[16];
-                LOG_DBG("Green mode: needed power = %s W, gen power = %s W, battery level = %s Wh\n",
+                LOG_INFO("Green mode: needed power = %s W, gen power = %s W, battery level = %s Wh\n",
                          str(needed_power, needed_power_str), str(gen_power, gen_power_str), str(battery_level, battery_level_str));
 
                 coap_message_t request[1];
@@ -445,7 +441,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 char payload[COAP_MAX_CHUNK_SIZE];
                 char buf[16], buf2[16];
                 // compare with gen_power
-                if (needed_power <= gen_power) 
+                if (needed_power > 0.0 && needed_power <= gen_power) 
                 {
                     snprintf(payload, // Ask needed power to energy node
                         COAP_MAX_CHUNK_SIZE,
@@ -457,7 +453,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 {
                     // try with the battery
                     float dc_needed_power = needed_power * DC_AC_COEFF;
-                    if (dc_needed_power * GREEN_HOURS <= battery_level - 50.0) // battery is enough
+                    if (needed_power == 0.0 || dc_needed_power * GREEN_HOURS <= battery_level - 20.0) // battery is enough
                     {
                         snprintf(payload, // Ask needed power to energy node
                             COAP_MAX_CHUNK_SIZE,
@@ -517,7 +513,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 status = green_vent ? STATUS_VENT : status;
 
                 char power_str[16], target_temp_str[16];
-                LOG_INFO("New settings: power=%s, status=%d, mode=%d, targetTemp=%s\n",
+                LOG_INFO("Green mode new settings: power=%s, status=%d, mode=%d, targetTemp=%s\n",
                 str(conditioner_power, power_str), status, cond_mode, str(target_temp, target_temp_str));
 
                 coap_set_payload(request, (uint8_t *) payload, strlen(payload));

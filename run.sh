@@ -66,8 +66,6 @@ function run_cloud(){
     gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default;'
     echo "Cloud application started successfully!"
 
-    echo "Press any key to start the HTTP server and User application..."
-    read -n 1 -s
     gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./http_server.py;'    
     gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./user_app.py;'
     echo "Cloud application, HTTP server and User application started successfully!"
@@ -100,8 +98,6 @@ function flash_rpl_border_router() {
 function flash() {
     local ports=("/dev/ttyACM0" "/dev/ttyACM1")
     local index=0
-
-    flash_rpl_border_router
 
     for node_name in $NODE_LIST; do
         flash_sensor "$node_name" "${ports[$index]}"

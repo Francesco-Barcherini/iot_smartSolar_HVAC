@@ -43,8 +43,13 @@ mode_map = {
 }
 
 lastRoomTemp = 27.0
+colorRoomTemp = RESET
+stop_get_all = False
 
 def print_get_all(data):
+    global stop_get_all
+    if stop_get_all:
+        return
     # clear
     print("\033[H\033[J", end='')
 
@@ -70,14 +75,14 @@ def print_get_all(data):
 
     roomTemp = data['roomTemp']['v']
     global lastRoomTemp
-    colorRoomTemp = BRIGHT_MAGENTA if roomTemp > lastRoomTemp + 0.1 else \
-                    BRIGHT_CYAN if roomTemp < lastRoomTemp - 0.1 else \
-                    RESET
-    lastRoomTemp = roomTemp if abs(roomTemp - lastRoomTemp) > 0.1 else lastRoomTemp
+    global colorRoomTemp
+    if abs(roomTemp - lastRoomTemp) > 0.0:
+        colorRoomTemp = BRIGHT_MAGENTA if roomTemp > lastRoomTemp else BRIGHT_CYAN
+        lastRoomTemp = roomTemp
     print(f"ROOM:    {colorRoomTemp}{roomTemp}°C{RESET}")
 
-    antidust = f"{GREEN} antidust on{RESET}" if data['antiDust']['v'] == 1 else \
-                f"{BACKGROUND_BRIGHT_RED} antidust alarm{RESET}" if data['antiDust']['v'] == 2 else ""
+    antidust = f"{GREEN}antidust on{RESET}" if data['antiDust']['v'] == 1 else \
+                f"{BACKGROUND_BRIGHT_RED}antidust alarm{RESET}" if data['antiDust']['v'] == 2 else ""
     modTemp = data['weather']['modTemp']
     irradiation = data['weather']['irr']
     genPower = data['gen_power']['v']
@@ -101,7 +106,6 @@ def print_get_all(data):
 
 
 # ========== PERIODIC GET /all ==========
-stop_get_all = False
 def periodic_get_all():
     while True:
         global stop_get_all

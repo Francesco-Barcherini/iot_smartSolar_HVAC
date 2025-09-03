@@ -72,6 +72,7 @@ char* str(float value, char* output)
 {
     int integer = (int) value;
     float fraction = value - integer;
+    fraction = fraction < 0 ? -fraction : fraction; // abs
     int fraction_int = (int)(fraction * 100);
     snprintf(output, 16, "%d.%d", integer, fraction_int);
     return output;
@@ -173,24 +174,6 @@ static void analyze_prediction(float prediction)
     }
 }
 
-void
-client_chunk_handler(coap_callback_request_state_t *state)
-{
-
-  coap_message_t *response = state->state.response;
-
-  const uint8_t *chunk;
-
-  if(response == NULL) {
-    puts("Request timed out");
-    return;
-  }
-
-//   int len = coap_get_payload(response, &chunk);
-
-//   printf("|%.*s", len, (char *)chunk);
-}
-
 static coap_callback_request_state_t req_state;
 
 PROCESS_THREAD(energy_node_process, ev, data) 
@@ -226,7 +209,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
     // Wait connection
     while (!coap_endpoint_is_connected(&hvac_node_endpoint)) {
         LOG_DBG("Waiting for connection to HVAC node...\n");
-        etimer_set(&sleep_timer, CLOCK_SECOND * 2);
+        etimer_set(&sleep_timer, CLOCK_SECOND * 0.5);
         PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&sleep_timer));
         #if PLATFORM_HAS_LEDS || LEDS_COUNT
             leds_toggle(LEDS_GREEN);

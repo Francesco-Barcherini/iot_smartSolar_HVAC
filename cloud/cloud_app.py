@@ -34,9 +34,12 @@ BATTERY_CAPACITY = 10000.0  # in Wh
 
 GET_TIME = 3 # seconds
 
+last_response = {}
+
 mq_client = None
 
 def normal_feedback_logic():
+    print("Normal feedback logic")
     settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
     #hvac_pw = settings[1]
     hvac_status = settings[2]
@@ -47,17 +50,22 @@ def normal_feedback_logic():
     if hvac_status != 1:
         roomTemp = HVAC_DB.get_last_sensor_entries("roomTemp", 1)[0][2]
         outTemp = HVAC_DB.get_last_sensor_entries("outTemp", 1)[0][2]
-        needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF
-        needed_power /= POWER_COEFF
-        needed_power = -needed_power if hvac_status == 2 else needed_power
-        needed_power = max(needed_power, 0.0)
-        needed_power = round(needed_power, 2) # round to 10e-2
+        if hvac_status == 2 and roomTemp <= target_temp \
+            or hvac_status == 3 and roomTemp >= target_temp:
+            print("Target temperature reached, HVAC suspended")
+            needed_power = 0.0
+        else:
+            needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF
+            needed_power /= POWER_COEFF
+            needed_power = -needed_power if hvac_status == 2 else needed_power
+            needed_power = max(needed_power, 0.0)
+            needed_power = round(needed_power, 2) # round to 10e-2
     print(f"needed_power: {needed_power} W")
 
     gen_power = HVAC_DB.get_last_sensor_entries("gen_power", 1)[0][2]
     battery_power = HVAC_DB.get_last_sensor_entries("battery", 1)[0][2]
     print(f"gen_power: {gen_power} W, battery_power: {battery_power} Wh")
-    if needed_power <= gen_power:
+    if needed_power > 0.0 and needed_power <= gen_power:
         print("Using solar power")
         HVAC_DB.insert_relay_data(0, 0, needed_power, needed_power)
         HVAC_DB.insert_hvac_data(needed_power, hvac_status, hvac_mode, target_temp)
@@ -69,7 +77,7 @@ def normal_feedback_logic():
         # try battery
         dc_needed_power = needed_power * DC_AC_COEFF
         rel_sp = 1 if battery_power < 0.9 * BATTERY_CAPACITY else 2
-        if dc_needed_power * BATTERY_INTERVAL <= battery_power - 50.0:
+        if needed_power == 0.0 or dc_needed_power * BATTERY_INTERVAL <= battery_power - 20.0:
             print("Using battery power")
             HVAC_DB.insert_relay_data(rel_sp, 1, gen_power, needed_power)
             HVAC_DB.insert_hvac_data(needed_power, hvac_status, hvac_mode, target_temp)
@@ -88,11 +96,14 @@ def normal_feedback_logic():
             client_hvac.put(conf.SETTINGS_URL, hvac_payload)
 
 def handle_energy_with_hvac_down(is_gen_power):
-    rel_sp = HVAC_DB.get_last_entries("Relay", 1)[0][1]
+    relays = HVAC_DB.get_last_entries("Relay", 1)[0]
+    rel_sp = relays[1]
+    rel_h = relays[2]
+    p_h = float(relays[4])
     gen_power = HVAC_DB.get_last_sensor_entries("gen_power", 1)[0][2]
     battery_power = HVAC_DB.get_last_sensor_entries("battery", 1)[0][2]
     new_rel_sp = 1 if battery_power < 0.9 * BATTERY_CAPACITY else 2
-    if not is_gen_power and rel_sp == new_rel_sp:
+    if not is_gen_power and rel_sp == new_rel_sp and rel_h == 2 and p_h == 0.0:
         print("No change in relay state needed")
         return
     rel_sp = new_rel_sp 
@@ -120,6 +131,8 @@ def notification_callback(url, response):
     if response is None:
         print(f"No response received for {url}")
         return
+    global last_response
+    last_response[url] = response
     payload_raw = None
     try:
         global mq_client
@@ -217,7 +230,9 @@ def start_observation(client, url):
 
 def stop_observation(client, url):
     try:
-        client.stop_observing(url)
+        global last_response
+        if url in last_response and last_response[url]:
+            client.cancel_observing(last_response[url], False)
         print(f"Stopped observation on {url}")
     except Exception as e:
         print(f"Error stopping observation on {url}: {e}")

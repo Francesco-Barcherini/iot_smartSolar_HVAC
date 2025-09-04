@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <locale.h>
-
 #include "contiki.h"
 #include "sys/log.h"
 #include "coap-callback-api.h"
@@ -159,7 +157,7 @@ static void analyze_prediction(float prediction)
     }
 
     char gen_power_str[16], prediction_str[16];
-    LOG_WARN("Generated power is low: %s W, prediction: %s W\n", str(gen_power, gen_power_str), str(prediction, prediction_str));
+    LOG_WARN("Generated power is low: %sW, prediction: %sW\n", str(gen_power, gen_power_str), str(prediction, prediction_str));
     nWrongPredictions++;
 
     if (nWrongPredictions == WRONG_PREDICTIONS_THRESHOLD_ALARM)
@@ -192,10 +190,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
     leds_on(LEDS_GREEN); // Indicate energy node is starting
 #endif
 
-    LOG_DBG("Starting energy node\n");
-
-    //setlocale(LC_NUMERIC, "C");
-
+    LOG_INFO("Starting energy node\n");
     // Initialize resources
     coap_activate_resource(&res_weather, "sensors/weather");
     coap_activate_resource(&res_battery, "sensors/battery");
@@ -208,7 +203,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
 
     // Wait connection
     while (!coap_endpoint_is_connected(&hvac_node_endpoint)) {
-        LOG_DBG("Waiting for connection to HVAC node...\n");
+        LOG_INFO("Waiting for connection to HVAC node...\n");
         etimer_set(&sleep_timer, CLOCK_SECOND * 0.5);
         PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&sleep_timer));
         #if PLATFORM_HAS_LEDS || LEDS_COUNT
@@ -216,7 +211,7 @@ PROCESS_THREAD(energy_node_process, ev, data)
         #endif 
     }
     etimer_stop(&sleep_timer);
-    LOG_DBG("Connected to HVAC node\n");
+    LOG_INFO("Connected to HVAC node\n");
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
     leds_on(LEDS_GREEN);
 #endif
@@ -248,7 +243,6 @@ PROCESS_THREAD(energy_node_process, ev, data)
                     if (relay_sp == RELAY_SP_BATTERY || relay_sp == RELAY_SP_GRID)
                         power_sp = gen_power;
                 }
-                    
                 etimer_reset(&gen_power_timer);
             }
             else if (data == &prediction_timer) {
@@ -257,20 +251,20 @@ PROCESS_THREAD(energy_node_process, ev, data)
                     // Trigger prediction logic
                     float prediction = solar_power_predict();
                     char pred[16];
-                    LOG_INFO("Solar power prediction: %s W\n", str(prediction, pred));
+                    LOG_DBG("Solar power prediction: %sW\n", str(prediction, pred));
                     analyze_prediction(prediction);
 
                     if (energyNodeStatus == STATUS_ANTIDUST)
                     {
                         etimer_set(&end_antiDust_timer, ANTIDUST_INTERVAL);
-                        LOG_DBG("Anti-dust mode active, will end in %d seconds\n", (int) (ANTIDUST_INTERVAL / CLOCK_SECOND));
+                        LOG_WARN("Anti-dust mode active, will end in %d seconds\n", (int) (ANTIDUST_INTERVAL / CLOCK_SECOND));
                     }
                 }
                 etimer_reset(&prediction_timer);
             }
             else if (data == &end_antiDust_timer) {
                 if (energyNodeStatus == STATUS_ANTIDUST) {
-                    LOG_DBG("Ending anti-dust mode\n");
+                    LOG_INFO("Ending anti-dust mode\n");
                     end_antidust_handler();
                 }
                 etimer_stop(&end_antiDust_timer);
@@ -297,9 +291,9 @@ PROCESS_THREAD(energy_node_process, ev, data)
             // toggle defected
             defected = !defected;
 
-    #if PLATFORM_HAS_LEDS || LEDS_COUNT
-            leds_single_toggle(LEDS_YELLOW);
-    #endif /* PLATFORM_HAS_LEDS || LEDS_COUNT */
+            #if PLATFORM_HAS_LEDS || LEDS_COUNT
+                leds_single_toggle(LEDS_YELLOW);
+            #endif /* PLATFORM_HAS_LEDS || LEDS_COUNT */
                 
             char mode[16];
             strcpy(mode, defected ? "DUST" : "CLEAN");
@@ -324,7 +318,6 @@ PROCESS_THREAD(energy_node_process, ev, data)
         }
 #endif /* PLATFORM_HAS_BUTTON */
     }
-
     PROCESS_END();
 }
 

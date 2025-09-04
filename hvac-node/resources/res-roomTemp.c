@@ -4,9 +4,7 @@
 #include "contiki.h"
 #include "coap-engine.h"
 #include "random.h"
-
 #include "sys/clock.h"
-
 #include "sys/log.h"
 #define LOG_MODULE "ROOMT"
 #define LOG_LEVEL LOG_LEVEL_APP
@@ -67,7 +65,7 @@ static void update_roomTemp()
     lastUpdateTime = currentTime;
 
     char roomTemp_str[16];
-    LOG_INFO("New room temperature: roomTemp=%s°C\n",
+    LOG_INFO("New room temperature: roomTemp=%s°C\n", //TODO
             str(roomTemp, roomTemp_str));
 }
 
@@ -85,7 +83,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 static void res_event_handler(void);
 
 EVENT_RESOURCE(res_roomTemp,
-                "title=\"Room temperature\";rt=\"sensor\";obs",
+                "title=\"Room temperature\";rt=\"Sensor\";obs",
                 res_get_handler,
                 NULL,
                 NULL,
@@ -108,5 +106,5 @@ static void res_event_handler(void)
     update_roomTemp();
     coap_notify_observers(&res_roomTemp);
     
-    LOG_DBG("Room temperature resource event handler called\n");
+    LOG_INFO("Room temperature resource event handler called\n");//TODO
 }

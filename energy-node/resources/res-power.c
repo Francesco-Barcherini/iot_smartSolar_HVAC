@@ -4,7 +4,6 @@
 #include "contiki.h"
 #include "coap-engine.h"
 #include "random.h"
-
 #include "sys/log.h"
 #define LOG_MODULE "PW"
 #define LOG_LEVEL LOG_LEVEL_APP
@@ -14,7 +13,7 @@ char* str(float value, char* output);
 enum status_t {STATUS_ON, STATUS_ANTIDUST, STATUS_ALARM};
 extern enum status_t energyNodeStatus;
 
-// Generated power parameters
+// Generated power parametersgen_power
 #define MAX_POWER 3000.0 // in W
 #define MAX_OFFSET_PREDICTION 0.1 * MAX_POWER
 #define MAX_STEP 0.005 * MAX_POWER
@@ -30,7 +29,7 @@ static void update_gen_power()
     if (energyNodeStatus != STATUS_ON)
     {
         gen_power = 0.0;
-        LOG_INFO("Energy Node is not ON, generated power set to 0.0 W\n");
+        LOG_DBG("Energy Node is not ON, generated power set to 0.0 W\n");
         return;
     }
     
@@ -52,7 +51,7 @@ static void update_gen_power()
                 expected_power + step;
 
     char gp[16];
-    LOG_INFO("Generated power updated: %s W (defected: %d)\n", str(gen_power, gp), defected);
+    LOG_DBG("Generated power updated: %sW (defected: %d)\n", str(gen_power, gp), defected);
 }
 
 void gen_power_json_string(char* buffer)
@@ -69,7 +68,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 static void res_event_handler(void);
 
 EVENT_RESOURCE(res_gen_power,
-                "title=\"gen_power data\";rt=\"gen_power\";obs",
+                "title=\"gen_power data\";rt=\"Sensor\";obs",
                 res_get_handler,
                 NULL,
                 NULL,
@@ -84,7 +83,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
     coap_set_payload(response, buffer, strlen((char *)buffer));
 
     LOG_DBG("gen_power resource GET handler called\n");
-    LOG_DBG("Sending generated power: %s W\n", (char *)buffer);
+    LOG_DBG("Sending generated power: %sW\n", (char *)buffer);
 }
 
 static void res_event_handler(void)

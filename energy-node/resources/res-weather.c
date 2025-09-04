@@ -74,7 +74,7 @@ static void update_weather()
     module_temperature += step_module_temp;
 
     char irradiation_str[16], out_temperature_str[16], module_temperature_str[16];
-    LOG_INFO("New weather values: Irradiation=%s, Out Temperature=%s, Module Temperature=%s\n",
+    LOG_DBG("New weather values: Irradiation=%s, Out Temperature=%s, Module Temperature=%s\n",
             str(irradiation, irradiation_str), str(out_temperature, out_temperature_str), str(module_temperature, module_temperature_str));
 }
 
@@ -92,7 +92,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 static void res_event_handler(void);
 
 EVENT_RESOURCE(res_weather,
-                "title=\"Weather data (irr, outTemp, modTemp)\";rt=\"weather\";obs",
+                "title=\"Weather data (irr, outTemp, modTemp)\";rt=\"Sensor[3]\";obs",
                 res_get_handler,
                 NULL,
                 NULL,

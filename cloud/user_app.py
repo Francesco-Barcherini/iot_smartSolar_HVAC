@@ -50,14 +50,13 @@ def print_get_all(data):
     global stop_get_all
     if stop_get_all:
         return
-    # clear
-    print("\033[H\033[J", end='')
+    print("\033[H\033[J", end='') # clear
 
     grid_balance = float(data['Grid power balance'])
     grid_balance_eur = 0.15 * grid_balance
     grid_color = BRIGHT_GREEN if grid_balance > 0 else BRIGHT_RED if grid_balance < 0 else RESET
     print("STATS:")
-    print(f"  Grid power balance: {round(grid_balance,2)}Wh ({grid_color}{round(grid_balance_eur,2)}€{RESET})")
+    print(f"  Grid power balance (1h): {round(grid_balance,2)}Wh ({grid_color}{round(grid_balance_eur,2)}€{RESET})")
     print(f"  HVAC consumption (1h): {round(float(data['HVAC consumption (1h)']),2)}Wh")
     print(f"  Last antidust operation: {data['Last antiDust operation']}")
 
@@ -124,7 +123,6 @@ def periodic_get_all():
         time.sleep(3)
 
 # ========== CLI MENU ==========
-
 def send_post(endpoint, json_data):
     try:
         r = requests.post(f"{conf.HTTP_SERVER}/{endpoint}", json=json_data)
@@ -241,13 +239,11 @@ def handle_mqtt_message(client, userdata, message):
     try:
         payload = message.payload.decode()
         print(f"{BACKGROUND_BRIGHT_RED}\n[SIGNAL RECEIVED] {message.topic}={payload}{RESET}")
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Failed to decode JSON from MQTT message: {e}")
     except Exception as e:
         print(f"[ERROR] Failed to process MQTT message: {e}")
         return
-        
-
-    except json.JSONDecodeError as e:
-        print(f"[ERROR] Failed to decode JSON from MQTT message: {e}")
 
 if __name__ == "__main__":
     print("Starting user_app...")
@@ -257,7 +253,6 @@ if __name__ == "__main__":
     mqtt_client.on_message = handle_mqtt_message
     mqtt_client.subscribe("antiDust")
     mqtt_client.subscribe("hvac")
-
 
     # Start background /all updater
     threading.Thread(target=periodic_get_all, daemon=True).start()

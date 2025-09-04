@@ -2,15 +2,14 @@
 Code for the cloud app that contains all the modules.
 
 The cloud app:
-- answers to user_app commands (he is a server HTTP)
-- intercept CoAP observations from the sensors and store them in the DB -> use coapthon
+- answers to user_app commands (it is an HTTP server)
+- intercept CoAP observations from the sensors and store them in the DB
 - sets the actuator reading from data in the DB
 - sends data and alarms into an MQTT broker self hosted
 - provides a REST API to the user_app to get data from the DB and to interact with the system
 '''
 
 import sys
-import os
 import json
 import threading
 from coapthon.client.helperclient import HelperClient
@@ -24,6 +23,7 @@ from modules.mqtt_manager import get_mqtt_client
 import config.app_config as conf
 from modules.colors import *
 
+# Parameters for the control logic
 VENT_POWER = 50.0
 DELTAT_COEFF = 0.0005
 POWER_COEFF = 0.00005
@@ -47,7 +47,7 @@ def normal_feedback_logic():
     target_temp = settings[4]
     
     needed_power = VENT_POWER
-    if hvac_status != 1:
+    if hvac_status != 1: # cool or heat, not vent
         roomTemp = HVAC_DB.get_last_sensor_entries("roomTemp", 1)[0][2]
         outTemp = HVAC_DB.get_last_sensor_entries("outTemp", 1)[0][2]
         if hvac_status == 2 and roomTemp <= target_temp \
@@ -60,13 +60,13 @@ def normal_feedback_logic():
             needed_power = -needed_power if hvac_status == 2 else needed_power
             needed_power = max(needed_power, 0.0)
             needed_power = round(needed_power, 2) # round to 10e-2
-    print(f"needed_power: {needed_power} W")
+    print(f"(NFL) Needed_power: {needed_power}W")
 
     gen_power = HVAC_DB.get_last_sensor_entries("gen_power", 1)[0][2]
     battery_power = HVAC_DB.get_last_sensor_entries("battery", 1)[0][2]
-    print(f"gen_power: {gen_power} W, battery_power: {battery_power} Wh")
+    print(f"(NFL) gen_power: {gen_power}W, battery_power: {battery_power}Wh")
     if needed_power > 0.0 and needed_power <= gen_power:
-        print("Using solar power")
+        print("(NFL) Using solar power")
         HVAC_DB.insert_relay_data(0, 0, needed_power, needed_power)
         HVAC_DB.insert_hvac_data(needed_power, hvac_status, hvac_mode, target_temp)
         energy_payload = f'r_sp=0&r_h=0&p_sp={needed_power}&p_h={needed_power}'
@@ -78,7 +78,7 @@ def normal_feedback_logic():
         dc_needed_power = needed_power * DC_AC_COEFF
         rel_sp = 1 if battery_power < 0.9 * BATTERY_CAPACITY else 2
         if needed_power == 0.0 or dc_needed_power * BATTERY_INTERVAL <= battery_power - 20.0:
-            print("Using battery power")
+            print("(NFL) Using battery power")
             HVAC_DB.insert_relay_data(rel_sp, 1, gen_power, needed_power)
             HVAC_DB.insert_hvac_data(needed_power, hvac_status, hvac_mode, target_temp)
             energy_payload = f'r_sp={rel_sp}&r_h=1&p_sp={gen_power}&p_h={needed_power}'
@@ -87,7 +87,7 @@ def normal_feedback_logic():
             client_hvac.put(conf.SETTINGS_URL, hvac_payload)
         else:
             # attach to grid
-            print("Using grid power")
+            print("(NFL) Using grid power")
             HVAC_DB.insert_relay_data(rel_sp, 2, gen_power, needed_power)
             HVAC_DB.insert_hvac_data(needed_power, hvac_status, hvac_mode, target_temp)
             energy_payload = f'r_sp={rel_sp}&r_h=2&p_sp={gen_power}&p_h={needed_power}'
@@ -96,6 +96,7 @@ def normal_feedback_logic():
             client_hvac.put(conf.SETTINGS_URL, hvac_payload)
 
 def handle_energy_with_hvac_down(is_gen_power):
+    print("HVAC off/error logic")
     relays = HVAC_DB.get_last_entries("Relay", 1)[0]
     rel_sp = relays[1]
     rel_h = relays[2]
@@ -112,22 +113,19 @@ def handle_energy_with_hvac_down(is_gen_power):
     client_energy.put(conf.RELAY_URL, energy_payload)
 
 def remote_control_logic(component):
+    print("Remote control logic")
     settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
-    #hvac_pw = settings[1]
     hvac_status = settings[2]
     hvac_mode = settings[3]
-    target_temp = settings[4]
-    energy_antiDust = HVAC_DB.get_last_entries("AntiDust", 1)[0][1]
     if component in ["battery", "gen_power", "roomTemp", "settings", "relay"]:
-        if component != "roomTemp" and (hvac_status == 0 or hvac_status == 4): # hvac off
+        if component != "roomTemp" and (hvac_status == 0 or hvac_status == 4): # hvac off (ignore roomTemp change)
             handle_energy_with_hvac_down(component == "gen_power")
-            return
-        if hvac_status not in [0,4] and hvac_mode == 0: # hvac on and normal mode
+        elif hvac_status not in [0,4] and hvac_mode == 0: # hvac on and normal mode
             normal_feedback_logic()
-        # if error or green -> do nothing
+        else:
+            print("(RCL) No action needed")
 
 def notification_callback(url, response):
-    #print(f"Notification received from {url}")
     if response is None:
         print(f"No response received for {url}")
         return
@@ -136,29 +134,23 @@ def notification_callback(url, response):
     payload_raw = None
     try:
         global mq_client
-        # CoAPthon's response.payload can be bytes, decode it to string for JSON parsing
-
         payload_raw = response.payload.decode('utf-8') if isinstance(response.payload, bytes) else response.payload
-        #print(f"Raw payload: '{payload_raw}'")
         if not payload_raw:
             print(f"Empty payload received from {url}. Skipping processing.")
             return
-
         payload = json.loads(payload_raw)
-
-        # Determine the actual type of data based on the 'n' field in the payload
-        data_type = payload.get("n")
+        data_type = payload.get("n") # Determine the actual type of data based on the 'n' field in the payload
         if not data_type:
             raise ValueError("Payload missing 'n' field (data type identifier). Cannot process.")
 
         if data_type == "weather":
             # Process weather data: "{\"n\":\"weather\",\"irr\":%s,\"outTemp\":%s,\"modTemp\":%s}"
             if "n" in payload and payload["n"] == "weather" \
-            and "irr" in payload and "outTemp" in payload and "modTemp" in payload:
-                    for key in ["irr", "outTemp", "modTemp"]:
-                        if not isinstance(payload[key], (int, float)):
-                            raise ValueError(f"Invalid value for {key}: {payload[key]}")
-                        HVAC_DB.insert_sensor_data(key, payload[key])
+                and "irr" in payload and "outTemp" in payload and "modTemp" in payload:
+                for key in ["irr", "outTemp", "modTemp"]:
+                    if not isinstance(payload[key], (int, float)):
+                        raise ValueError(f"Invalid value for {key}: {payload[key]}")
+                    HVAC_DB.insert_sensor_data(key, payload[key])
             else:
                 raise ValueError("Invalid weather data format")
             remote_control_logic(data_type)
@@ -168,13 +160,12 @@ def notification_callback(url, response):
                 HVAC_DB.insert_sensor_data(data_type, payload["v"])
             else:
                 raise ValueError(f"Invalid data format for {data_type}")
-            remote_control_logic(data_type)
-                
+            remote_control_logic(data_type)       
         elif data_type == "relay":
             # Process relay data: "{\"n\":\"relay\",\"r_sp\":%d,\"r_h\":%d,\"p_sp\":%s,\"p_h\":%s}"
             if "n" in payload and payload["n"] == "relay" \
-            and "r_sp" in payload and "r_h" in payload \
-            and "p_sp" in payload and "p_h" in payload:
+                and "r_sp" in payload and "r_h" in payload \
+                and "p_sp" in payload and "p_h" in payload:
                 HVAC_DB.insert_relay_data(
                     payload["r_sp"], 
                     payload["r_h"], 
@@ -183,8 +174,7 @@ def notification_callback(url, response):
                 )
             else:
                 raise ValueError("Invalid relay data format")  
-            # nothing to control    
-            
+            # nothing to control      
         elif data_type == "antiDust":
             # Process anti-dust data: "{\"n\":\"antiDust\",\"v\":%d}",
             if "n" in payload and payload["n"] == "antiDust" and "v" in payload:
@@ -192,12 +182,11 @@ def notification_callback(url, response):
                 mq_client.publish("antiDust", payload["v"])
             else:
                 raise ValueError("Invalid anti-dust data format")
-
         elif data_type == "settings":
             # Process HVAC data: "{\"n\":\"settings\",\"pw\":%s,\"status\":%d,\"mode\":%d,\"targetTemp\":%s}",
             if "n" in payload and payload["n"] == "settings" \
-            and "pw" in payload and "status" in payload \
-            and "mode" in payload and "targetTemp" in payload:
+                and "pw" in payload and "status" in payload \
+                and "mode" in payload and "targetTemp" in payload:
                 HVAC_DB.insert_hvac_data(
                     payload["pw"], 
                     payload["status"], 
@@ -211,11 +200,8 @@ def notification_callback(url, response):
             remote_control_logic("settings")
         else:
             raise ValueError(f"Unknown URL: {url}")
-
     except mysql.connector.Error as e:
-        print(f"Database error: {e}")
-        #HVAC_DB.connect()  # Reconnect to the database
-                
+        print(f"Database error: {e}")        
     except Exception as e:
         print(f"Error processing notification: {url}, {e}")
 
@@ -239,7 +225,6 @@ def stop_observation(client, url):
 
 def start_all_observations():
     print("Starting observations for all sensors...")
-    # Start observations
     start_observation(client_energy_WEATHER, conf.WEATHER_URL)
     start_observation(client_energy_BATTERY, conf.BATTERY_URL)
     start_observation(client_energy_GEN_POWER, conf.GEN_POWER_URL)
@@ -251,7 +236,6 @@ def start_all_observations():
 
 def stop_all_observations():
     print("Stopping observations for all sensors...")
-    # Stop observations
     stop_observation(client_energy_WEATHER, conf.WEATHER_URL)
     stop_observation(client_energy_BATTERY, conf.BATTERY_URL)
     stop_observation(client_energy_GEN_POWER, conf.GEN_POWER_URL)
@@ -260,6 +244,16 @@ def stop_all_observations():
     stop_observation(client_hvac_ROOM_TEMP, conf.ROOM_TEMP_URL)
     stop_observation(client_hvac_SETTINGS, conf.SETTINGS_URL)
     print("All observations stopped successfully.")
+
+def stop_all_clients():
+    client_energy_WEATHER.stop()
+    client_energy_BATTERY.stop()
+    client_energy_GEN_POWER.stop()
+    client_energy_RELAY.stop()
+    client_energy_ANTI_DUST.stop()
+    client_hvac_ROOM_TEMP.stop()
+    client_hvac_SETTINGS.stop()
+    print("All CoAP clients stopped successfully.")
 
 app = Flask(__name__)
 
@@ -313,23 +307,15 @@ def get_settings():
 def get_all_data():
     try:
         data = {}
-        # Get weather data from DB / CoAP GET request        
         data["weather"] = get_weather()    
-        # Get battery data from DB / CoAP GET request
         data["battery"] = get_v("battery")    
-        # Get gen_power data from DB / CoAP GET request
         data["gen_power"] = get_v("gen_power")    
-        # Get relay data from DB / CoAP GET request
         data["relay"] = get_relay()    
-        # Get antiDust data from DB / CoAP GET request
         data["antiDust"] = get_v("antiDust")    
-        # Get roomTemp data from DB / CoAP GET request
         data["roomTemp"] = get_v("roomTemp")    
-        # Get settings data from DB / CoAP GET request
         data["settings"] = get_settings()    
 
         try:
-            # Get stats from the DB
             # Total HVAC power consumption of the last hour
             total_power = HVAC_DB.get_total_hvac_power_consumption(3600)
             #add actual power contribution
@@ -350,8 +336,6 @@ def get_all_data():
             data["Last antiDust operation"] = last_anti_dust        
         except mysql.connector.Error as e:
             print(f"Database error: {e}")
-            HVAC_DB.connect()
-
         return jsonify(data), 200
     except Exception as e:
         print(f"Error in /all endpoint: {e}")
@@ -374,7 +358,6 @@ def set_relay():
         )
         remote_control_logic("relay")
         return "Relay command accepted", 200
-
     except Exception as e:
         return f"Error: {e}", 400
 
@@ -386,7 +369,6 @@ def set_anti_dust():
         client_energy.put(conf.ANTI_DUST_URL, coap_payload)
     except Exception as e:
         return f"Error: {e}", 400
-    
     energy_antiDust = HVAC_DB.get_last_entries("AntiDust", 1)[0][2]
     # if different update and store
     if energy_antiDust != int(payload["v"]):
@@ -418,13 +400,11 @@ def set_settings():
         client_hvac.put(conf.SETTINGS_URL, coap_payload)
     except Exception as e:
         return f"Error: {e}", 400
-
     settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
     hvac_pw = settings[1]
     hvac_status = settings[2]
     hvac_mode = settings[3]
     target_temp = settings[4]
-
     hvac_status = hvac_status if payload["status"] == "same" else STATUS_MAP.get(payload["status"], 0)
     hvac_mode = hvac_mode if payload["mode"] == "same" else MODE_MAP.get(payload["mode"], 0)
     target_temp = target_temp if payload["targetTemp"] == -1 else float(payload["targetTemp"])
@@ -444,7 +424,7 @@ def set_settings():
 def flask_app():
     app.run(host=conf.HTTP_HOST, port=conf.HTTP_PORT, debug=True)
 
-# Start the CoAP client wrt the sensors
+# Start the CoAP clients to interact with the sensors
 print('Starting CoAP client...')
 if '--cooja' in sys.argv:
     client_energy = HelperClient((conf.COOJA_ENERGY_IP, conf.COAP_PORT), None, None, None)
@@ -467,34 +447,21 @@ else:
     client_hvac_ROOM_TEMP = HelperClient((conf.DONGLE_HVAC_IP, conf.COAP_PORT), None, None, None)
     client_hvac_SETTINGS = HelperClient((conf.DONGLE_HVAC_IP, conf.COAP_PORT), None, None, None)
 
+# start a mosquitto broker and get a client
+mq_client = get_mqtt_client()
+
 if __name__ == "__main__":
-    # arguments: --new-db --cooja
+    # arguments: --new-db --cooja --default
     if '--new-db' in sys.argv:
         user_input = ''
         while (user_input != 'y' and user_input != 'n'):
-            user_input = input('Are you sure you want to create a new DB?[y/n] ')
-        
+            user_input = input('Are you sure you want to create a new DB?[y/n] ')   
         if user_input == 'y':
             HVAC_DB.reset_db()
-    
     if '--default' in sys.argv:
-        HVAC_DB.insert_default()
-
-# start a mosquitto broker
-print('Checking Mosquitto broker status...')
-status = os.system('systemctl is-active --quiet mosquitto.service')
-if status != 0:
-    print('Mosquitto broker is not active. Restarting...')
-    os.system('sudo systemctl restart mosquitto.service')
-else:
-    print('Mosquitto broker is already active.')
-mq_client = get_mqtt_client()
-print('Mosquitto broker setup completed')
-
-if __name__ == "__main__":    
+        HVAC_DB.insert_default()  
     threading.Thread(target=start_all_observations, daemon=True).start()
     print('CoAP client started')
-
     # Wait for the user to stop the script
     try:
         while True:
@@ -502,9 +469,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Stopping observations...")
         stop_all_observations()
-        client_energy.stop()
-        client_hvac.stop()
-        print("CoAP client stopped")
+        stop_all_clients()
         mq_client.disconnect()
         print("MQTT client disconnected")
         HVAC_DB.close()  # Close the database connection

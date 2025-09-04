@@ -1,5 +1,3 @@
-# IP addresses
-
 COAP_PORT = 5683
 
 ## COOJA

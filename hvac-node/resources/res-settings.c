@@ -40,7 +40,7 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
 static void res_event_handler(void);
 
 EVENT_RESOURCE(res_settings,
-                "title=\"HVAC power, status (off|vent|cool|heat|error), mode (normal|green)\";rt=\"control\";obs",
+                "title=\"HVAC power, status (off|vent|cool|heat|error), mode (normal|green)\";rt=\"Control\";obs",
                 res_get_handler,
                 res_post_put_handler,
                 res_post_put_handler,
@@ -172,7 +172,7 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
     target_temp = (new_target_temp == -1.0) ? target_temp : new_target_temp;
     
     char power_str[16], target_temp_str[16];
-    LOG_INFO("Air conditioning updated: power=%s, status=%d, mode=%d, targetTemp=%s\n",
+    LOG_DBG("Air conditioning updated: power=%s, status=%d, mode=%d, targetTemp=%s\n",
              str(conditioner_power, power_str), status, cond_mode, str(target_temp, target_temp_str));
 
     coap_set_status_code(response, CHANGED_2_04);

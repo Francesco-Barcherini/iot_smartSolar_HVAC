@@ -3,9 +3,7 @@
 #include <string.h>
 #include "contiki.h"
 #include "coap-engine.h"
-
 #include "sys/clock.h"
-
 #include "sys/log.h"
 #define LOG_MODULE "BATT"
 #define LOG_LEVEL LOG_LEVEL_APP
@@ -43,7 +41,7 @@ static void update_battery_level()
     if (charge_rate != 0.0)
     {
         char level[16];
-        LOG_INFO("Battery level updated: %s Wh\n", str(battery_level, level));
+        LOG_DBG("Battery level updated: %sWh\n", str(battery_level, level));
     }
 }
 
@@ -61,7 +59,7 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
 static void res_event_handler(void);
 
 EVENT_RESOURCE(res_battery,
-                "title=\"Battery data\";rt=\"battery\";obs",
+                "title=\"Battery data\";rt=\"Sensor\";obs",
                 res_get_handler,
                 NULL,
                 NULL,
@@ -79,12 +77,11 @@ static void res_get_handler(coap_message_t *request, coap_message_t *response, u
     LOG_DBG("Battery resource GET handler called\n");
 
     char buf[16];
-    LOG_DBG("Battery level: %s Wh\n", str(battery_level, buf));
+    LOG_DBG("Battery level: %sWh\n", str(battery_level, buf));
 }
 
 static void res_event_handler(void)
-{    
-    update_battery_level();
+{
     coap_notify_observers(&res_battery);
 
     LOG_DBG("Battery resource event handler called\n");
@@ -93,7 +90,6 @@ static void res_event_handler(void)
 void updateChargeRate(float rate)
 {
     update_battery_level();
-    // Notify observers
     lastNotificationTime = lastNotificationTime == 0 ? clock_seconds() : lastNotificationTime;
     unsigned long currentTime = clock_seconds();
     if (charge_rate != 0.0 && 
@@ -107,5 +103,5 @@ void updateChargeRate(float rate)
     charge_rate = rate;
 
     char charge_rate_str[16];
-    LOG_INFO("Charge rate set to: %s W\n", str(charge_rate, charge_rate_str));
+    LOG_DBG("Charge rate set to: %sW\n", str(charge_rate, charge_rate_str));
 }

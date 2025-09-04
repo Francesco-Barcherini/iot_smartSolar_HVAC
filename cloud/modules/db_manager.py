@@ -1,4 +1,3 @@
-import mysql.connector
 from mysql.connector import pooling
 from config import app_config
 
@@ -69,7 +68,7 @@ class MySQLDB():
             cursor.execute(f'INSERT INTO Sensors (sensor, value) VALUES ("{sensor}", {value})')
             connection.commit()
             if cursor.rowcount > 0:
-                print(f'Sensor data inserted: {sensor} - {value}')
+                print(f'Sensor data inserted into DB: {sensor} - {value}')
         finally:
             cursor.close()
             connection.close()
@@ -81,7 +80,7 @@ class MySQLDB():
             cursor.execute(f'INSERT INTO Relay (solar_to, house_from, power_solar, power_home) VALUES ({solar_to}, {house_from}, {power_solar}, {power_home})')
             connection.commit()
             if cursor.rowcount > 0:
-                print(f'Relay data inserted: {solar_to}, {house_from}, {power_solar}, {power_home}')
+                print(f'Relay data inserted into DB: {solar_to}, {house_from}, {power_solar}, {power_home}')
         finally:
             cursor.close()
             connection.close()
@@ -93,7 +92,7 @@ class MySQLDB():
             cursor.execute(f'INSERT INTO AntiDust (operation) VALUES ("{operation}")')
             connection.commit()
             if cursor.rowcount > 0:
-                print(f'AntiDust operation inserted: {operation}')
+                print(f'AntiDust operation inserted into DB: {operation}')
         finally:
             cursor.close()
             connection.close()
@@ -105,7 +104,7 @@ class MySQLDB():
             cursor.execute(f'INSERT INTO HVAC (power, status, mode, target_temp) VALUES ({power}, {status}, {mode}, {target_temp})')
             connection.commit()
             if cursor.rowcount > 0:
-                print(f'HVAC data inserted: {power}, {status}, {mode}, {target_temp}')
+                print(f'HVAC data inserted into DB: {power}, {status}, {mode}, {target_temp}')
         finally:
             cursor.close()
             connection.close()
@@ -121,7 +120,7 @@ class MySQLDB():
         self.insert_anti_dust_data(0)
         self.insert_hvac_data(0.0, 0, 0, 27.5)
 
-    # test method to get last num entities of each table
+    # method to get last num entities of each table
     def get_last_entries(self, table, num):
         try:
             connection = self._connection_pool.get_connection()
@@ -143,7 +142,6 @@ class MySQLDB():
             connection.close()
 
     # Total HVAC power consumption of the last hour => power multiplied by the interval with the previous entry
-    # If there is no previous entry, the power is considered 0
     # If there is no entry in the last hour, the result is 0
     def get_total_hvac_power_consumption(self, seconds=3600):
         try:
@@ -173,8 +171,8 @@ class MySQLDB():
         
     # Net balance of the last hour of energy sent to the grid
     def get_net_balance(self, seconds=3600):
-        # do the same of previous function but for relay tabel and only when r_sp = 2 or r_h = 2
-        # sum (net * T - T_prev) where net = A - B
+        # do the same of previous function but for relay table and only when r_sp = 2 or r_h = 2
+        # sum (net * (T - T_prev)) where net = A - B
         # A = power_solar if solar_to = 2
         # B = power_home if house_from = 2
         try:
@@ -225,7 +223,7 @@ class MySQLDB():
         
 
     def close(self):
-        #self._connection_pool.close()
+        self._connection_pool._remove_connections()
         print("Database connection closed.")
 
 # Create a shared instance of MySQLDB

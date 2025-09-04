@@ -1,6 +1,4 @@
-#---------------------------------------------
-#               PARAMETERS
-#---------------------------------------------
+#!/bin/bash
 # List of nodes to compile
 NODE_LIST="energy-node hvac-node"
 TARGET="nrf52840"
@@ -59,6 +57,12 @@ function run_rpl_border_router(){
     
 }
 
+function run_user_app(){
+    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./http_server.py;'    
+    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./user_app.py;'
+    echo "HTTP server and User application started successfully!"
+}
+
 function run_cloud(){
     local target=$1
     local newdb=$2
@@ -66,9 +70,7 @@ function run_cloud(){
     gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default;'
     echo "Cloud application started successfully!"
 
-    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./http_server.py;'    
-    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./user_app.py;'
-    echo "Cloud application, HTTP server and User application started successfully!"
+    run_user_app
 }
 
 # Function to flash a sensor on a specific port
@@ -121,34 +123,9 @@ case $1 in
     cloud_app)
         run_cloud $2 $3
         ;;
-    # sim)
-    #     create_db "fresh"
-    #     compile_all_nodes
-    #     echo "Starting Cooja..."
-    #     run_cooja
-    #     echo "Press any key to start the border-router..."
-    #     read -n 1 -s
-    #     run_rpl_border_router "cooja"
-    #     echo "Press any key to start the CoAP server..."
-    #     read -n 1 -s
-    #     run_cloud_app
-    #     ;;
-    # relsim)
-    #     create_db "fresh"
-    #     run_rpl_border_router "cooja"
-    #     echo "Press any key to start the CoAP server..."
-    #     read -n 1 -s
-    #     run_cloud_app
-    #     ;;
-    # create-db)
-    #     create_db "$2"
-    #     ;;
-    # sql)
-    #     query_db "$2"
-    #     ;;
-    # user)
-    #     run_user_app
-    #     ;;
+    user)
+        run_user_app
+        ;;
     flash_sensor)
         flash_sensor $2 $3
         ;;
@@ -169,24 +146,7 @@ case $1 in
         login
         ;;
     *)
-        echo "------------------------------------------------------------------HELP----------------------------------------------------------------"
-        echo "Usage: $0 {compile_all|compile|cooja|border-router|coap-server|sim|relsim|create-db|sql|user|flash|deploy}"
-        echo "----------------------------------------------------------------COMMANDS--------------------------------------------------------------"
-        echo "[1] WRAP-UP COMMANDS:"
-        echo -e "\t-sim: Resets the database, compiles the nodes, runs the Cooja simulator, connects the border router and starts the CoAP server"
-        echo -e "\t-relsim: Runs the coap server and connects the border router to cooja"
-        echo -e "\t-flash: Flashes the nodes to the dongles"
-        echo -e "\t-deploy: Deploys the system"
-        echo "[2] SINGLE COMMANDS:"
-        echo -e "\t-compile_all: Compiles all the nodes"
-        echo -e "\t-compile: Compiles a specific node. Usage: compile <node_name>"
-        echo -e "\t-cooja: Runs the Cooja simulator"
-        echo -e "\t-border-router: Runs the RPL border router. Usage: border-router <target>"
-        echo -e "\t-coap-server: Runs the CoAP server"
-        echo -e "\t-create-db: Creates the database if not exists. Write 'fresh' to delete the previous database. Usage: create-db <fresh>"
-        echo -e "\t-sql: Executes a SQL query on the database. Usage: sql <query>"
-        echo -e "\t-user: Runs the user application"
-
+        echo "Command not found"
         exit 1
         ;;
 esac

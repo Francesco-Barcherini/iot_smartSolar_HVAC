@@ -1,17 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <locale.h>
-
 #include "contiki.h"
 #include "sys/log.h"
 #include "coap-callback-api.h"
 #include "coap-observe-client.h"
-
 #include "os/dev/button-hal.h"
 #include "os/dev/leds.h"
 #include "jsonparse.h"
-
 #include "coap-engine.h"
 
 /* Log configuration */
@@ -63,7 +59,6 @@ float outTemp = 27.5;
 float gen_power = 0.0;
 float battery_level = 0.0;
 
-
 static struct etimer green_timer;
 struct etimer sleep_timer;
 
@@ -110,7 +105,6 @@ void green_stop()
 void handle_stop()
 {
     conditioner_power = 0.0; // Reset power
-
     if (cond_mode == MODE_GREEN)
         green_stop();
 }
@@ -142,7 +136,6 @@ void handle_settings(float old_power, enum status_t old_status, enum cond_mode_t
             cond_mode = MODE_NORMAL;
             return;
         }
-
         LOG_INFO("Switching to green mode.\n");
         process_post(&hvac_node_process, green_start_event, NULL);
         return;
@@ -164,21 +157,31 @@ static coap_observee_t* weather_obs;
 static coap_observee_t* battery_obs;
 static coap_observee_t* gen_power_obs;
 
-void get_value_from_json(const uint8_t *json, int len)
+void get_value_from_json(const uint8_t *payload, int len)
 {
+    uint8_t json[COAP_MAX_CHUNK_SIZE];
+    if (len >= COAP_MAX_CHUNK_SIZE)
+        len = COAP_MAX_CHUNK_SIZE - 1;
+    memcpy(json, payload, len);
+    json[len] = '\0';
+    // if {"n" is corrupted, repair it
+    if ((json[0] != '{' || json[1] != '"') && json[2] == 'n') {
+        LOG_DBG("Repairing corrupted JSON\n");
+        json[0] = '{';
+        json[1] = '"';
+    }
+    LOG_DBG("Received JSON: %.*s\n", len, (char *)json);
+
     struct jsonparse_state state;
     char key[16];
     char value_str[16];
 
     int next;
-    jsonparse_setup(&state, (const char *)json, len);
+    jsonparse_setup(&state, (char *)json, len);
 
     char name_buf[16] = {0};
     char value_buf[16] = {0};
     bool found_name = false;
-
-    // Log the json
-    LOG_INFO("Received JSON: %.*s\n", len, (char *)json);
 
     while((next = jsonparse_next(&state)) != JSON_TYPE_ERROR) {
         if(next == JSON_TYPE_PAIR_NAME) {
@@ -196,17 +199,17 @@ void get_value_from_json(const uint8_t *json, int len)
 
                     if(strcmp(name_buf, "battery") == 0) {
                         battery_level = v;
-                        LOG_INFO("Battery updated: %s\n", value_buf);
+                        LOG_DBG("Battery updated: %s\n", value_buf);
                     } else if(strcmp(name_buf, "gen_power") == 0) {
                         gen_power = v;
-                        LOG_INFO("Gen Power updated: %s\n", value_buf);
+                        LOG_DBG("Gen Power updated: %s\n", value_buf);
                     }
                 }
             } else if(strcmp(key, "outTemp") == 0) {
                 if(jsonparse_next(&state) == JSON_TYPE_STRING || jsonparse_get_type(&state) == JSON_TYPE_NUMBER) {
                     jsonparse_copy_value(&state, value_str, sizeof(value_str));
                     outTemp = atof(value_str);
-                    LOG_INFO("Weather outTemp updated: %s\n", value_str);
+                    LOG_DBG("Weather outTemp updated: %s\n", value_str);
                 }
             }
         }
@@ -319,17 +322,13 @@ PROCESS_THREAD(hvac_node_process, ev, data)
 {
     static struct etimer rootTemp_timer;
 
-    //static bool long_press;
-
     PROCESS_BEGIN();
 
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
     leds_on(LEDS_RED); // Indicate hvac node is starting
 #endif
 
-    LOG_DBG("Starting hvac node\n");
-
-    //setlocale(LC_NUMERIC, "C");
+    LOG_INFO("Starting hvac node\n");
 
     // Initialize resources
     coap_activate_resource(&res_roomTemp, "sensors/roomTemp");
@@ -344,7 +343,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
 
     // Wait connection
     while (!coap_endpoint_is_connected(&energy_node_endpoint)) {
-            LOG_DBG("Waiting for connection to energy node...\n");
+            LOG_INFO("Waiting for connection to energy node...\n");
             etimer_set(&sleep_timer, CLOCK_SECOND * 0.5);
             PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&sleep_timer));
             #if PLATFORM_HAS_LEDS || LEDS_COUNT
@@ -352,7 +351,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
             #endif
         }
         etimer_stop(&sleep_timer);
-        LOG_DBG("Connected to energy node\n");
+        LOG_INFO("Connected to energy node\n");
     #if PLATFORM_HAS_LEDS || LEDS_COUNT
         leds_on(LEDS_RED);
     #endif
@@ -396,7 +395,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 }
 
                 if (!observing[0] || !observing[1] || !observing[2]) {
-                    LOG_DBG("Green mode: waiting observe registration complete\n");
+                    LOG_INFO("Green mode: waiting observe registration\n");
                     LOG_DBG("Observing: %d, %d, %d\n",
                         observing[0], observing[1], observing[2]);
                     etimer_reset(&green_timer);
@@ -431,7 +430,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 }
 
                 char needed_power_str[16], gen_power_str[16], battery_level_str[16];
-                LOG_INFO("Green mode: needed power = %s W, gen power = %s W, battery level = %s Wh\n",
+                LOG_INFO("Green mode: needed power = %sW, gen power = %sW, battery level = %sWh\n",
                          str(needed_power, needed_power_str), str(gen_power, gen_power_str), str(battery_level, battery_level_str));
 
                 coap_message_t request[1];
@@ -558,7 +557,6 @@ PROCESS_THREAD(hvac_node_process, ev, data)
             if(btn->press_duration_seconds == 2) 
             {
                 LOG_DBG("Button pressed for 2 seconds, toggling ERROR status.\n");
-                //long_press = true;
                 // toggle ERROR status
                 if (status == STATUS_ERROR) {
                     conditioner_power = 0.0; // Reset power

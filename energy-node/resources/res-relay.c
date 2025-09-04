@@ -4,7 +4,6 @@
 #include "contiki.h"
 #include "coap-engine.h"
 #include "random.h"
-
 #include "sys/log.h"
 #define LOG_MODULE "RELAY"
 #define LOG_LEVEL LOG_LEVEL_APP
@@ -45,7 +44,7 @@ void update_relay(enum relay_sp_t new_relay_sp, enum relay_home_t new_relay_home
     updateBatteryChargeRate();
 
     char power_sp_str[16], power_home_str[16];
-    LOG_INFO("Relay states updated: relay_sp=%d, relay_home=%d, power_sp=%s, power_home=%s\n",
+    LOG_INFO("Relay state updated: relay_sp=%d, relay_home=%d, power_sp=%s, power_home=%s\n",
              relay_sp, relay_home, str(power_sp, power_sp_str), str(power_home, power_home_str));
 }
 
@@ -65,7 +64,7 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
 static void res_event_handler(void);
 
 EVENT_RESOURCE(res_relay,
-                "title=\"relay state\";rt=\"control\";obs",
+                "title=\"Relay state\";rt=\"Control\";obs",
                 res_get_handler,
                 res_post_put_handler,
                 res_post_put_handler,
@@ -163,7 +162,6 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
     else 
     {
         if (new_relay_home == RELAY_HOME_SP)
-            //|| (int) new_relay_home == (int) new_relay_sp)
         {
             LOG_ERR("Invalid relay state: new_relay_sp=%d, new_relay_home=%d\n", 
                      new_relay_sp, new_relay_home);
@@ -190,7 +188,6 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
 
 static void res_event_handler(void)
 {
-    coap_notify_observers(&res_relay);
-    
+    coap_notify_observers(&res_relay); 
     LOG_DBG("relay resource event handler called\n");
 }

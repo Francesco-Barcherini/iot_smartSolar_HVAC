@@ -60,7 +60,8 @@ float gen_power = 0.0;
 float battery_level = 0.0;
 
 static struct etimer green_timer;
-struct etimer sleep_timer;
+static struct etimer sleep_timer;
+static struct etimer error_timer;
 
 // Resources
 extern coap_resource_t res_roomTemp, res_settings;
@@ -105,6 +106,11 @@ void green_stop()
 void handle_stop()
 {
     conditioner_power = 0.0; // Reset power
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    leds_single_off(LEDS_YELLOW);
+    if (status == STATUS_ERROR)
+        etimer_set(&error_timer, BLINK_INTERVAL);
+#endif
     if (cond_mode == MODE_GREEN)
         green_stop();
 }
@@ -118,6 +124,17 @@ void handle_settings(float old_power, enum status_t old_status, enum cond_mode_t
         handle_stop();
         return;
     }
+
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    if (old_status == STATUS_ERROR && status != STATUS_ERROR){
+        #if COOJA
+            leds_single_on(LEDS_RED);
+        #else
+            leds_on(LEDS_RED); // Indicate hvac node is starting
+        #endif
+        etimer_stop(&error_timer);
+    }
+#endif
 
     // print old and new
     char old_power_str[16], old_target_temp_str[16];
@@ -325,7 +342,11 @@ PROCESS_THREAD(hvac_node_process, ev, data)
     PROCESS_BEGIN();
 
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
-    leds_on(LEDS_RED); // Indicate hvac node is starting
+    #ifdef COOJA
+        leds_single_on(LEDS_RED)
+    #else
+        leds_on(LEDS_RED); // Indicate hvac node is starting
+    #endif
 #endif
 
     LOG_INFO("Starting hvac node\n");
@@ -347,13 +368,21 @@ PROCESS_THREAD(hvac_node_process, ev, data)
             etimer_set(&sleep_timer, CLOCK_SECOND * 0.5);
             PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&sleep_timer));
             #if PLATFORM_HAS_LEDS || LEDS_COUNT
-                leds_toggle(LEDS_RED);
+                #ifdef COOJA
+                    leds_single_toggle(LEDS_RED)
+                #else
+                    leds_toggle(LEDS_RED);
+                #endif
             #endif
         }
         etimer_stop(&sleep_timer);
         LOG_INFO("Connected to energy node\n");
     #if PLATFORM_HAS_LEDS || LEDS_COUNT
-        leds_on(LEDS_RED);
+        #ifdef COOJA
+            leds_single_on(LEDS_RED)
+        #else
+            leds_on(LEDS_RED);
+        #endif
     #endif
 
     // Initialize observations
@@ -374,13 +403,16 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 res_roomTemp.trigger();
                 etimer_reset(&rootTemp_timer);
             }
-            // else if (data == &blink_timer) {
-            //     Blink yellow LED in anti-dust mode
-            //     if (energyNodeStatus == STATUS_ANTIDUST) {
-            //         leds_single_toggle(LEDS_YELLOW);
-            //         etimer_reset(&blink_timer);
-            //     }
-            // }
+            else if (data == &error_timer) {
+        #if PLATFORM_HAS_LEDS || LEDS_COUNT
+            #if COOJA
+                leds_single_toggle(LEDS_RED);
+            #else
+                leds_toggle(LEDS_RED);
+            #endif
+        #endif
+                etimer_reset(&error_timer);
+            }
             else if (data == &green_timer) {
                 if (cond_mode != MODE_GREEN) {
                     LOG_ERR("Green mode started but mode is not green.\n");
@@ -522,6 +554,13 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 res_settings.trigger(); // Trigger settings resource update
                 status = actual_status;
 
+                #if PLATFORM_HAS_LEDS || LEDS_COUNT
+                    if (conditioner_power > 0.0)
+                        leds_single_on(LEDS_YELLOW); // Indicate green mode active
+                    else
+                        leds_single_off(LEDS_YELLOW); // Turn off yellow LED
+                #endif
+
                 // Reset the timer for the next green mode check
                 etimer_reset(&green_timer);
             }
@@ -560,6 +599,15 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 // toggle ERROR status
                 if (status == STATUS_ERROR) {
                     conditioner_power = 0.0; // Reset power
+                #if PLATFORM_HAS_LEDS || LEDS_COUNT
+                    leds_single_off(LEDS_YELLOW); // Turn off yellow LED
+                    #if COOJA
+                        leds_single_on(LEDS_RED);
+                    #else
+                        leds_on(LEDS_RED);
+                    #endif
+                    etimer_stop(&error_timer);
+                #endif
                     cond_mode = MODE_NORMAL; // Reset mode
                     status = STATUS_OFF;
                     LOG_INFO("HVAC system recovered from error state.\n");

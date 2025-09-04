@@ -5,10 +5,8 @@
 #include "sys/log.h"
 #include "coap-callback-api.h"
 #include "coap.h"
-
 #include "os/dev/button-hal.h"
 #include "os/dev/leds.h"
-
 #include "coap-engine.h"
 
 /* Log configuration */
@@ -53,6 +51,7 @@ void update_relay(enum relay_sp_t new_relay_sp, enum relay_home_t new_relay_home
 extern float charge_rate;
 extern enum relay_sp_t relay_sp;
 extern float power_sp;
+extern enum antiDust_t antiDustState;
 
 // Status
 enum status_t {STATUS_ON, STATUS_ANTIDUST, STATUS_ALARM};
@@ -60,8 +59,10 @@ enum status_t energyNodeStatus = STATUS_ON;
 
 static unsigned int nWrongPredictions = 0; // Counter for wrong predictions
 
-struct etimer blink_timer;
-struct etimer sleep_timer;
+static struct etimer blink_timer;
+static struct etimer alarm_timer;
+static struct etimer end_antiDust_timer;
+static struct etimer sleep_timer;
 
 // CoAP observation
 coap_endpoint_t hvac_node_endpoint;
@@ -84,6 +85,10 @@ static void alarm_handler()
 {
     energyNodeStatus = STATUS_ALARM;
     update_antiDust(ANTIDUST_ALARM); // Disable anti-dust mode
+
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    etimer_set(&alarm_timer, BLINK_INTERVAL);
+#endif
     
     res_gen_power.trigger();
 
@@ -98,7 +103,16 @@ static void restart()
 {
     energyNodeStatus = STATUS_ON;
     update_antiDust(ANTIDUST_OFF); // Disable anti-dust mode
-    
+
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    etimer_stop(&alarm_timer);
+    #ifdef COOJA
+        leds_single_on(LEDS_GREEN);
+    #else
+        leds_on(LEDS_GREEN); // Indicate energy node is starting
+    #endif
+#endif
+     
     res_gen_power.trigger();
 
     // relay control
@@ -116,6 +130,8 @@ static void antidust_handler()
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
     etimer_set(&blink_timer, BLINK_INTERVAL);
 #endif
+    etimer_set(&end_antiDust_timer, ANTIDUST_INTERVAL);
+    LOG_WARN("Anti-dust mode active, will end in %d seconds\n", (int) (ANTIDUST_INTERVAL / CLOCK_SECOND));
 
     res_gen_power.trigger();
 
@@ -172,6 +188,25 @@ static void analyze_prediction(float prediction)
     }
 }
 
+void set_antidust_handler(enum antiDust_t oldState)
+{
+    if (oldState == antiDustState)
+        return; // No change
+
+    if (oldState == ANTIDUST_OFF && antiDustState == ANTIDUST_ON) //OFF -> ON
+        antidust_handler();
+    else if (oldState == ANTIDUST_ON && antiDustState == ANTIDUST_OFF) //ON -> OFF
+    {
+        LOG_INFO("Ending anti-dust mode\n");
+        etimer_stop(&end_antiDust_timer);
+        end_antidust_handler();
+    }   
+    else if (oldState == ANTIDUST_ALARM && antiDustState == ANTIDUST_OFF) //ALARM -> OFF
+        restart();
+    else
+        LOG_ERR("Invalid antiDust state transition: %d -> %d\n", oldState, antiDustState);
+}
+
 static coap_callback_request_state_t req_state;
 
 PROCESS_THREAD(energy_node_process, ev, data) 
@@ -180,14 +215,16 @@ PROCESS_THREAD(energy_node_process, ev, data)
     static struct etimer gen_power_timer;
     static struct etimer prediction_timer;
 
-    static struct etimer end_antiDust_timer;
-
     static bool long_press = false;
 
     PROCESS_BEGIN();
 
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
-    leds_on(LEDS_GREEN); // Indicate energy node is starting
+    #ifdef COOJA
+        leds_single_on(LEDS_GREEN);
+    #else
+        leds_on(LEDS_GREEN); // Indicate energy node is starting
+    #endif
 #endif
 
     LOG_INFO("Starting energy node\n");
@@ -207,13 +244,21 @@ PROCESS_THREAD(energy_node_process, ev, data)
         etimer_set(&sleep_timer, CLOCK_SECOND * 0.5);
         PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&sleep_timer));
         #if PLATFORM_HAS_LEDS || LEDS_COUNT
-            leds_toggle(LEDS_GREEN);
+            #ifdef COOJA
+                leds_single_toggle(LEDS_GREEN);
+            #else
+                leds_toggle(LEDS_GREEN);
+            #endif
         #endif 
     }
     etimer_stop(&sleep_timer);
     LOG_INFO("Connected to HVAC node\n");
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
-    leds_on(LEDS_GREEN);
+    #ifdef COOJA
+        led_single_on(LEDS_GREEN);
+    #else
+        leds_on(LEDS_GREEN);
+    #endif
 #endif
 
     // Initialize timers
@@ -253,12 +298,6 @@ PROCESS_THREAD(energy_node_process, ev, data)
                     char pred[16];
                     LOG_DBG("Solar power prediction: %sW\n", str(prediction, pred));
                     analyze_prediction(prediction);
-
-                    if (energyNodeStatus == STATUS_ANTIDUST)
-                    {
-                        etimer_set(&end_antiDust_timer, ANTIDUST_INTERVAL);
-                        LOG_WARN("Anti-dust mode active, will end in %d seconds\n", (int) (ANTIDUST_INTERVAL / CLOCK_SECOND));
-                    }
                 }
                 etimer_reset(&prediction_timer);
             }
@@ -274,6 +313,19 @@ PROCESS_THREAD(energy_node_process, ev, data)
                 if (energyNodeStatus == STATUS_ANTIDUST) {
                     leds_single_toggle(LEDS_YELLOW);
                     etimer_reset(&blink_timer);
+                }
+            }
+            else if (data == &alarm_timer) {
+                // Blink green LED in alarm mode
+                if (energyNodeStatus == STATUS_ALARM) {
+                    #if PLATFORM_HAS_LEDS || LEDS_COUNT
+                        #ifdef COOJA
+                            leds_single_toggle(LEDS_GREEN);
+                        #else
+                            leds_toggle(LEDS_GREEN);
+                        #endif
+                    #endif 
+                    etimer_reset(&alarm_timer);
                 }
             }
         }

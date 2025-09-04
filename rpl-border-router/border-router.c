@@ -48,7 +48,7 @@ PROCESS_THREAD(contiki_ng_br, ev, data)
   PROCESS_BEGIN();
 
 #if PLATFORM_HAS_LEDS || LEDS_COUNT
-  leds_on(LEDS_BLUE);
+    leds_single_on(LEDS_YELLOW);
 #endif
 
 #if BORDER_ROUTER_CONF_WEBSERVER

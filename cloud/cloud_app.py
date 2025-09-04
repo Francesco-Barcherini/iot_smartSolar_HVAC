@@ -365,11 +365,13 @@ def set_relay():
 def set_anti_dust():
     payload = request.get_json()
     try:
+        energy_antiDust = HVAC_DB.get_last_entries("AntiDust", 1)[0][1]
+        if (energy_antiDust == 2 and payload["v"] == 1):
+            return "Error: Cannot set antiDust to ON from ALARM state", 400
         coap_payload = f'antiDust={payload["v"]}'
         client_energy.put(conf.ANTI_DUST_URL, coap_payload)
     except Exception as e:
         return f"Error: {e}", 400
-    energy_antiDust = HVAC_DB.get_last_entries("AntiDust", 1)[0][2]
     # if different update and store
     if energy_antiDust != int(payload["v"]):
         HVAC_DB.insert_anti_dust_data(int(payload["v"]))

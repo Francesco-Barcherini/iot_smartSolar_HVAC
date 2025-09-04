@@ -4,6 +4,7 @@
 #include "contiki.h"
 #include "coap-engine.h"
 #include "random.h"
+#include "dev/leds.h"
 
 #include "sys/log.h"
 #define LOG_MODULE "AIRCOND"
@@ -170,6 +171,13 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
                         (cond_mode == MODE_GREEN) ? conditioner_power :
                         (new_power == -1.0) ? conditioner_power : new_power;
     target_temp = (new_target_temp == -1.0) ? target_temp : new_target_temp;
+
+#if PLATFORM_HAS_LEDS || LEDS_COUNT
+    if (conditioner_power > 0.0)
+        leds_single_on(LEDS_YELLOW); // Indicate green mode active
+    else
+        leds_single_off(LEDS_YELLOW); // Turn off yellow LED
+#endif
     
     char power_str[16], target_temp_str[16];
     LOG_DBG("Air conditioning updated: power=%s, status=%d, mode=%d, targetTemp=%s\n",

@@ -107,8 +107,6 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
             new_status = STATUS_COOL;
         } else if (strcmp(req_status, "heat") == 0) {
             new_status = STATUS_HEAT;
-        } else if (strcmp(req_status, "error") == 0) {
-            new_status = STATUS_ERROR;
         } else if (strcmp(req_status, "same") == 0) {
             new_status = status; // No change
         } else {

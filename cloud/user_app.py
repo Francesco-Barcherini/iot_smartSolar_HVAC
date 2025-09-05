@@ -153,7 +153,7 @@ def menu():
         elif choice == "1":
             stop_get_all = True
             try:
-                status = input("Status (off|vent|cool|heat|error): ")
+                status = input("Status (off|vent|cool|heat): ")
                 payload = {"n": "settings", "pw": -1, "status": status, "mode": "same", "targetTemp": -1}
                 send_post("settings", payload)
             except ValueError:
@@ -187,11 +187,7 @@ def menu():
             stop_get_all = True
             try:
                 v = input("antiDust value (on|off): ")
-                if v == "on":
-                    v = 1
-                elif v == "off":
-                    v = 0
-                else:
+                if v not in ["on", "off"]:
                     raise ValueError("Invalid input")
                 send_post("antiDust", {"n": "antiDust", "v": v})
             except ValueError:
@@ -211,7 +207,7 @@ def menu():
             stop_get_all = True
             try:
                 pw = float(input("Consumed power: "))
-                status = input("Status (off|vent|cool|heat|error|same): ")
+                status = input("Status (off|vent|cool|heat): ")
                 mode = input("Mode (normal|green): ")
                 target_temp = float(input("Target Temperature: "))
                 payload = {"n": "settings", "pw": pw, "status": status, "mode": mode, "targetTemp": target_temp}

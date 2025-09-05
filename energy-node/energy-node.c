@@ -187,14 +187,14 @@ static void analyze_prediction(float prediction)
         antidust_handler();
     }
 }
-
+static process_event_t blink_process;
 void set_antidust_handler(enum antiDust_t oldState)
 {
     if (oldState == antiDustState)
         return; // No change
 
     if (oldState == ANTIDUST_OFF && antiDustState == ANTIDUST_ON) //OFF -> ON
-        antidust_handler();
+        process_post(&energy_node_process, blink_process, NULL);
     else if (oldState == ANTIDUST_ON && antiDustState == ANTIDUST_OFF) //ON -> OFF
     {
         LOG_INFO("Ending anti-dust mode\n");
@@ -226,6 +226,8 @@ PROCESS_THREAD(energy_node_process, ev, data)
         leds_on(LEDS_GREEN); // Indicate energy node is starting
     #endif
 #endif
+
+    blink_process = process_alloc_event();
 
     LOG_INFO("Starting energy node\n");
     // Initialize resources
@@ -311,7 +313,9 @@ PROCESS_THREAD(energy_node_process, ev, data)
             else if (data == &blink_timer) {
                 // Blink yellow LED in anti-dust mode
                 if (energyNodeStatus == STATUS_ANTIDUST) {
+                #if PLATFORM_HAS_LEDS || LEDS_COUNT
                     leds_single_toggle(LEDS_YELLOW);
+                #endif
                     etimer_reset(&blink_timer);
                 }
             }
@@ -328,6 +332,9 @@ PROCESS_THREAD(energy_node_process, ev, data)
                     etimer_reset(&alarm_timer);
                 }
             }
+        }
+        else if (ev == blink_process) {
+            antidust_handler();
         }
 
         // Handle button events

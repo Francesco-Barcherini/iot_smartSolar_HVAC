@@ -39,7 +39,6 @@ last_response = {}
 mq_client = None
 
 def normal_feedback_logic():
-    print("Normal feedback logic")
     settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
     #hvac_pw = settings[1]
     hvac_status = settings[2]
@@ -52,7 +51,7 @@ def normal_feedback_logic():
         outTemp = HVAC_DB.get_last_sensor_entries("outTemp", 1)[0][2]
         if hvac_status == 2 and roomTemp <= target_temp \
             or hvac_status == 3 and roomTemp >= target_temp:
-            print("Target temperature reached, HVAC suspended")
+            print("(NFL) Target temperature reached, HVAC suspended")
             needed_power = 0.0
         else:
             needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF
@@ -96,7 +95,6 @@ def normal_feedback_logic():
             client_hvac.put(conf.SETTINGS_URL, hvac_payload)
 
 def handle_energy_with_hvac_down(is_gen_power):
-    print("HVAC off/error logic")
     relays = HVAC_DB.get_last_entries("Relay", 1)[0]
     rel_sp = relays[1]
     rel_h = relays[2]
@@ -105,7 +103,6 @@ def handle_energy_with_hvac_down(is_gen_power):
     battery_power = HVAC_DB.get_last_sensor_entries("battery", 1)[0][2]
     new_rel_sp = 1 if battery_power < 0.9 * BATTERY_CAPACITY else 2
     if not is_gen_power and rel_sp == new_rel_sp and rel_h == 2 and p_h == 0.0:
-        print("No change in relay state needed")
         return
     rel_sp = new_rel_sp 
     HVAC_DB.insert_relay_data(rel_sp, 2, gen_power, 0.0)
@@ -113,7 +110,6 @@ def handle_energy_with_hvac_down(is_gen_power):
     client_energy.put(conf.RELAY_URL, energy_payload)
 
 def remote_control_logic(component):
-    print("Remote control logic")
     settings = HVAC_DB.get_last_entries("HVAC", 1)[0]
     hvac_status = settings[2]
     hvac_mode = settings[3]
@@ -122,8 +118,6 @@ def remote_control_logic(component):
             handle_energy_with_hvac_down(component == "gen_power")
         elif hvac_status not in [0,4] and hvac_mode == 0: # hvac on and normal mode
             normal_feedback_logic()
-        else:
-            print("(RCL) No action needed")
 
 def notification_callback(url, response):
     if response is None:
@@ -366,18 +360,12 @@ def set_anti_dust():
     payload = request.get_json()
     try:
         energy_antiDust = HVAC_DB.get_last_entries("AntiDust", 1)[0][1]
-        if (energy_antiDust == 2 and payload["v"] == 1):
+        if (energy_antiDust == 2 and payload["v"] == "on"):
             return "Error: Cannot set antiDust to ON from ALARM state", 400
         coap_payload = f'antiDust={payload["v"]}'
         client_energy.put(conf.ANTI_DUST_URL, coap_payload)
     except Exception as e:
         return f"Error: {e}", 400
-    # if different update and store
-    if energy_antiDust != int(payload["v"]):
-        HVAC_DB.insert_anti_dust_data(int(payload["v"]))
-        energy_antiDust = int(payload["v"])
-        global mq_client
-        mq_client.publish("antiDust", energy_antiDust)
     return "AntiDust command accepted", 200
 
 STATUS_MAP = {
@@ -397,6 +385,8 @@ MODE_MAP = {
 def set_settings():
     payload = request.get_json()
     try:
+        if payload["status"] == "error":
+            return "Error: Cannot set HVAC to ERROR state", 400
         payload["pw"] = 0.0 if payload["status"] == "off" else payload["pw"]
         coap_payload = f'pw={payload["pw"]}&status={payload["status"]}&mode={payload["mode"]}&targetTemp={payload["targetTemp"]}'
         client_hvac.put(conf.SETTINGS_URL, coap_payload)

@@ -18,7 +18,7 @@
 #ifdef COOJA
     #define ENERGY_NODE_EP "coap://[fd00::202:2:2:2]:5683"
 #else /*NRF52840*/
-    #define ENERGY_NODE_EP "coap://[fd00::f6ce:3640:d05a:3662]:5683"
+    #define ENERGY_NODE_EP "coap://[fd00::f6ce:3691:b9bf:4d7c]:5683"
 #endif
 
 #define WEATHER_URI "/sensors/weather"
@@ -30,7 +30,7 @@
 // Publish intervals
 #define LONG_INTERVAL CLOCK_SECOND * 15
 #define SHORT_INTERVAL CLOCK_SECOND * 7
-#define BLINK_INTERVAL CLOCK_SECOND * 0.2
+#define BLINK_INTERVAL CLOCK_SECOND * 0.1
 #define GREEN_INTERVAL CLOCK_SECOND * 10
 #define GREEN_HOURS GREEN_INTERVAL / CLOCK_SECOND / 3600.0 // hours
 
@@ -83,14 +83,6 @@ char* str(float value, char* output)
     snprintf(output, 16, "%d.%d", integer, fraction_int);
     return output;
 }
-
-// #if PLATFORM_HAS_LEDS || LEDS_COUNT
-//     etimer_stop(&blink_timer);
-//     if (defected)
-//         leds_single_on(LEDS_YELLOW); // Indicate defected mode
-//     else
-//         leds_single_off(LEDS_YELLOW); // Turn off yellow LED
-// #endif
 
 void stop_observation_battery();
 void stop_observation_gen_power();

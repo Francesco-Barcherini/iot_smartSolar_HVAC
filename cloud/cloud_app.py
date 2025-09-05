@@ -264,7 +264,7 @@ def get_weather():
 def get_v(key):
     data = HVAC_DB.get_last_sensor_entries(key, 1)[0] if key != "antiDust" else HVAC_DB.get_last_entries("AntiDust", 1)[0]
     time_idx = 3 if key != "antiDust" else 2
-    if key == "battery" and datetime.now() - data[time_idx] > timedelta(seconds=GET_TIME):
+    if (key == "battery" or key == "roomTemp") and datetime.now() - data[time_idx] > timedelta(seconds=GET_TIME):
         url_map = {
             "battery": conf.BATTERY_URL,
             "gen_power": conf.GEN_POWER_URL,

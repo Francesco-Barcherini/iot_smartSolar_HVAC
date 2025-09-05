@@ -58,7 +58,7 @@ function run_rpl_border_router(){
 }
 
 function run_user_app(){
-    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./http_server.py;'    
+    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./http_server.py '$1' '$2';'    
     gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./user_app.py;'
     echo "HTTP server and User application started successfully!"
 }
@@ -70,7 +70,7 @@ function run_cloud(){
     gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default;'
     echo "Cloud application started successfully!"
 
-    run_user_app
+    run_user_app $target $newdb
 }
 
 # Function to flash a sensor on a specific port

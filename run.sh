@@ -27,7 +27,7 @@ function compile_node(){
 
     cd ./$node_name
     make distclean 2>&1 | grep -E "error|warning|TARGET not defined, using target 'native'" | grep -v "CC "
-    make TARGET=$TARGET BOARD=$BOARD $node_name 2>&1 | grep -E "error|warning|TARGET not defined, using target 'native'" | grep -v "CC "
+    make TARGET=$TARGET BOARD=$BOARD $node_name 2>&1 #| grep -E "error|warning|TARGET not defined, using target 'native'" | grep -v "CC "
     cd "$actual_path"
 }
 
@@ -65,12 +65,11 @@ function run_user_app(){
 
 function run_cloud(){
     local target=$1
-    local newdb=$2
     echo "Starting cloud application..."
-    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' '$newdb' --default;'
+    gnome-terminal --tab -- bash -c 'cd ./cloud; python3 ./cloud_app.py '$target' --default --new-db;'
     echo "Cloud application started successfully!"
 
-    run_user_app $target $newdb
+    run_user_app $target
 }
 
 # Function to flash a sensor on a specific port

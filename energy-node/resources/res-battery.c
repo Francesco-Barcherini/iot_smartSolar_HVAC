@@ -48,10 +48,11 @@ static void update_battery_level()
 void battery_json_string(char* buffer)
 {
     char buf[16];
-    snprintf(buffer, 
+    int snlen = snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE, 
             "{\"n\":\"battery\",\"v\":\"%s\"}", 
             str(battery_level, buf));
+    buffer[snlen] = '\0'; // Ensure null termination
 }
 
 // RESOURCE definition

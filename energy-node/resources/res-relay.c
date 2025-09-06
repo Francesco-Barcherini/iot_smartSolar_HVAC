@@ -52,10 +52,11 @@ void relay_json_string(char* buffer)
 {
     // json of relays state and power consumption
     char buf1[16], buf2[16];
-    snprintf(buffer, 
+    int snlen = snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE,
             "{\"n\":\"relay\",\"r_sp\":%d,\"r_h\":%d,\"p_sp\":%s,\"p_h\":%s}",
             relay_sp, relay_home, str(power_sp, buf1), str(power_home, buf2));
+    buffer[snlen] = '\0'; // Ensure null termination
 }
 
 // RESOURCE definition

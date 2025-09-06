@@ -81,10 +81,11 @@ static void update_weather()
 void weather_json_string(char* buffer)
 {
     char buf1[16], buf2[16], buf3[16];
-    snprintf(buffer, 
+    int snlen = snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE,
             "{\"n\":\"weather\",\"irr\":%s,\"outTemp\":%s,\"modTemp\":%s}",
             str(irradiation, buf1), str(out_temperature, buf2), str(module_temperature, buf3));
+    buffer[snlen] = '\0'; // Ensure null termination
 }
 
 // RESOURCE definition

@@ -57,10 +57,11 @@ static void update_gen_power()
 void gen_power_json_string(char* buffer)
 {
     char buf[16];
-    snprintf(buffer, 
+    int snlen = snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE, 
             "{\"n\":\"gen_power\",\"v\":\"%s\"}", 
             str(gen_power, buf));
+    buffer[snlen] = '\0'; // Ensure null termination
 }
 
 // RESOURCE definition

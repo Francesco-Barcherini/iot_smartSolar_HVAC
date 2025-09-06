@@ -23,10 +23,11 @@ void update_antiDust(enum antiDust_t newState)
 void antiDust_json_string(char* buffer)
 {
     // json of antiDust state
-    snprintf(buffer, 
+    int snlen = snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE,
             "{\"n\":\"antiDust\",\"v\":%d}",
             antiDustState);
+    buffer[snlen] = '\0'; // Ensure null termination
 }
 
 // RESOURCE definition

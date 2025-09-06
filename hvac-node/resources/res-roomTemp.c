@@ -15,11 +15,11 @@
 
 // T_new = T_old + (deltaT * c1 - power * c2) * elapsed_time
 // Temperature parameters
-#define DELTAT_COEFF 0.0005
-#define POWER_COEFF 0.00005
+#define DELTAT_COEFF 0.02
+#define POWER_COEFF 0.0004
 #define MAX_RANDOM_OFFSET 0.1
-#define MIN_TEMP 15.0
-#define MAX_TEMP 40.0
+#define MIN_TEMP 0.0
+#define MAX_TEMP 50.0
 
 // external resources
 extern float conditioner_power; // Power of the conditioner in W
@@ -39,7 +39,7 @@ static void update_roomTemp()
     unsigned long currentTime = clock_seconds();
     unsigned long elapsedTime = currentTime - lastUpdateTime;
 
-    float outside_contribution = DELTAT_COEFF * (outTemp - roomTemp);
+    float outside_contribution = (float) DELTAT_COEFF * (float)(outTemp - roomTemp);
     float conditioner_contribution = 
         (status == STATUS_OFF || status == STATUS_VENT || status == STATUS_ERROR) ? 0.0 :
         (status == STATUS_COOL) ? -conditioner_power * POWER_COEFF :
@@ -48,12 +48,12 @@ static void update_roomTemp()
 
     // Update room temperature
     roomTemp = roomTemp +
-                (outside_contribution + conditioner_contribution) * elapsedTime;
+                (outside_contribution + conditioner_contribution) * (float)elapsedTime;
 
     // Add a random offset
     float random_offset = (float) random_rand() / (float) RANDOM_RAND_MAX * 2.0 - 1.0;
     random_offset *= MAX_RANDOM_OFFSET;
-    roomTemp += random_offset;
+    roomTemp += random_offset * (float)elapsedTime / 7.0;
 
     // Ensure temperature stays within bounds
     if (roomTemp < MIN_TEMP) {
@@ -65,17 +65,21 @@ static void update_roomTemp()
     lastUpdateTime = currentTime;
 
     char roomTemp_str[16];
-    LOG_INFO("New room temperature: roomTemp=%s°C\n", //TODO
-            str(roomTemp, roomTemp_str));
+    char outcont[16], condcont[16];
+    LOG_INFO("Room temperature update: outside_contribution=%s, conditioner_contribution=%s\n",
+            str(outside_contribution, outcont), str(conditioner_contribution, condcont));
+    LOG_INFO("New room temperature: roomTemp=%s°C, elapsed=%d\n",
+            str(roomTemp, roomTemp_str), (int) elapsedTime);
 }
 
 void roomTemp_json_string(char* buffer)
 {
     char buf1[16];
-    snprintf(buffer, 
+    int snlen = snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE,
             "{\"n\":\"roomTemp\",\"v\":%s}",
             str(roomTemp, buf1));
+    buffer[snlen] = '\0'; // Ensure null termination
 }
 
 // RESOURCE definition
@@ -106,5 +110,5 @@ static void res_event_handler(void)
     update_roomTemp();
     coap_notify_observers(&res_roomTemp);
     
-    LOG_INFO("Room temperature resource event handler called\n");//TODO
+    LOG_DBG("Room temperature resource event handler called\n");
 }

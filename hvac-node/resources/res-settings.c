@@ -29,10 +29,11 @@ void settings_json_string(char* buffer)
 {
     // json of settings
     char buf1[16], buf2[16];
-    snprintf(buffer, 
+    int snlen = snprintf(buffer, 
             COAP_MAX_CHUNK_SIZE,
             "{\"n\":\"settings\",\"pw\":%s,\"status\":%d,\"mode\":%d,\"targetTemp\":%s}",
             str(conditioner_power, buf1), status, cond_mode, str(target_temp, buf2));
+    buffer[snlen] = '\0'; // Ensure null termination
 }
 
 // RESOURCE definition
@@ -149,7 +150,7 @@ static void res_post_put_handler(coap_message_t *request, coap_message_t *respon
 
     if (req_target_temp != NULL) {
         new_target_temp = atof(req_target_temp);
-        if (new_target_temp != -1.0 && (new_target_temp < 16.0 || new_target_temp > 35.0)) {
+        if (new_target_temp != -1.0 && (new_target_temp < 0.0 || new_target_temp > 50.0)) {
             LOG_ERR("Invalid target temperature: %s\n", req_target_temp);
             coap_set_status_code(response, BAD_REQUEST_4_00);
             return;

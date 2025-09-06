@@ -72,8 +72,12 @@ char* str(float value, char* output)
     int integer = (int) value;
     float fraction = value - integer;
     fraction = fraction < 0 ? -fraction : fraction; // abs
-    int fraction_int = (int)(fraction * 100);
-    snprintf(output, 16, "%d.%d", integer, fraction_int);
+    int fraction_int = (int)(fraction * 1000);
+    const char* zeros = fraction_int == 0.0 ? "" : 
+                    fraction_int < 10 ? "00" : 
+                    fraction_int < 100 ? "0" : "";
+    int snlen = snprintf(output, 16, "%d.%s%d", integer, zeros, fraction_int);
+    output[snlen] = '\0'; // Ensure null termination
     return output;
 }
 
@@ -270,8 +274,6 @@ PROCESS_THREAD(energy_node_process, ev, data)
 
     while(1) {
         PROCESS_WAIT_EVENT();
-
-        printf("\n");
 
         if (ev == PROCESS_EVENT_TIMER)
         {

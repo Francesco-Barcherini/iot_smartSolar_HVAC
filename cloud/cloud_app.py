@@ -25,9 +25,9 @@ from modules.colors import *
 
 # Parameters for the control logic
 VENT_POWER = 50.0
-DELTAT_COEFF = 0.0005
-POWER_COEFF = 0.00005
-SECONDS = 60.0
+DELTAT_COEFF = 0.02
+POWER_COEFF = 0.0004
+SECONDS = 7.0
 BATTERY_INTERVAL = 10.0/3600.0 # hours
 DC_AC_COEFF = 10.0
 BATTERY_CAPACITY = 10000.0  # in Wh
@@ -54,7 +54,7 @@ def normal_feedback_logic():
             print("(NFL) Target temperature reached, HVAC suspended")
             needed_power = 0.0
         else:
-            needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF
+            needed_power = (0.2 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF
             needed_power /= POWER_COEFF
             needed_power = -needed_power if hvac_status == 2 else needed_power
             needed_power = max(needed_power, 0.0)
@@ -272,7 +272,7 @@ def get_v(key):
             "antiDust": conf.ANTI_DUST_URL
         }
         response = client_energy.get(url_map[key]) if key != "roomTemp" else client_hvac.get(url_map[key])
-        data = json.loads(response.payload) if response.payload else {}
+        data = json.loads(response.payload) if response.payload is not None else {"v": data[1]}
         return data
     return {"v": data[2]} if key != "antiDust" else {"v": data[1]}
 
@@ -445,9 +445,9 @@ mq_client = get_mqtt_client()
 if __name__ == "__main__":
     # arguments: --new-db --cooja --default
     if '--new-db' in sys.argv:
-        user_input = ''
-        while (user_input != 'y' and user_input != 'n'):
-            user_input = input('Are you sure you want to create a new DB?[y/n] ')   
+        user_input = 'y'
+        # while (user_input != 'y' and user_input != 'n'):
+        #     user_input = input('Are you sure you want to create a new DB?[y/n] ')   
         if user_input == 'y':
             HVAC_DB.reset_db()
     if '--default' in sys.argv:

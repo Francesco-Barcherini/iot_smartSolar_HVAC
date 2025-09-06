@@ -36,9 +36,9 @@
 
 // Power parameters
 #define VENT_POWER 50.0
-#define DELTAT_COEFF 0.0005
-#define POWER_COEFF 0.00005
-#define SECONDS 60.0
+#define DELTAT_COEFF 0.02
+#define POWER_COEFF 0.0004
+#define SECONDS 7.0
 #define DC_AC_COEFF 10.0
 
 //external resources
@@ -79,8 +79,12 @@ char* str(float value, char* output)
     int integer = (int) value;
     float fraction = value - integer;
     fraction = fraction < 0 ? -fraction : fraction; // abs
-    int fraction_int = (int)(fraction * 100);
-    snprintf(output, 16, "%d.%d", integer, fraction_int);
+    int fraction_int = (int)(fraction * 1000);
+    const char* zeros = fraction_int == 0.0 ? "" : 
+                    fraction_int < 10 ? "00" : 
+                    fraction_int < 100 ? "0" : "";
+    int snlen = snprintf(output, 16, "%d.%s%d", integer, zeros, fraction_int);
+    output[snlen] = '\0'; // Ensure null termination
     return output;
 }
 
@@ -386,8 +390,6 @@ PROCESS_THREAD(hvac_node_process, ev, data)
     while(1) {
         PROCESS_WAIT_EVENT();
 
-        printf("\n");
-
         if (ev == PROCESS_EVENT_TIMER)
         {
             if (data == &rootTemp_timer) {
@@ -443,7 +445,7 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                     } 
                     else 
                     {
-                        needed_power = (0.3 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF;
+                        needed_power = (0.2 * (target_temp - roomTemp) / SECONDS) - (outTemp - roomTemp) * DELTAT_COEFF;
                         needed_power /= POWER_COEFF;
                         if (status == STATUS_COOL)
                             needed_power = -needed_power; // Cool mode uses negative power
@@ -466,10 +468,11 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                 // compare with gen_power
                 if (needed_power > 0.0 && needed_power <= gen_power) 
                 {
-                    snprintf(payload, // Ask needed power to energy node
+                    int snlen = snprintf(payload, // Ask needed power to energy node
                         COAP_MAX_CHUNK_SIZE,
                         "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                         (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(needed_power, buf), str(needed_power, buf2));
+                    payload[snlen] = '\0'; // Ensure null termination
                     conditioner_power = needed_power; // Update conditioner power
                 }
                 else
@@ -478,10 +481,11 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                     float dc_needed_power = needed_power * DC_AC_COEFF;
                     if (needed_power == 0.0 || dc_needed_power * GREEN_HOURS <= battery_level - 20.0) // battery is enough
                     {
-                        snprintf(payload, // Ask needed power to energy node
+                        int snlen = snprintf(payload, // Ask needed power to energy node
                             COAP_MAX_CHUNK_SIZE,
                             "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                             (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(needed_power, buf2));
+                        payload[snlen] = '\0'; // Ensure null termination
                         conditioner_power = needed_power;
                     }
                     else // not enough power
@@ -492,10 +496,11 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                             // gen_power is enough
                             if (VENT_POWER <= gen_power)
                             {
-                                snprintf(payload, // Ask vent power to energy node
+                                int snlen = snprintf(payload, // Ask vent power to energy node
                                     COAP_MAX_CHUNK_SIZE,
                                     "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                                     (int) RELAY_SP_HOME, (int) RELAY_HOME_SP, str(VENT_POWER, buf), str(VENT_POWER, buf2));
+                                payload[snlen] = '\0'; // Ensure null termination
                                 conditioner_power = VENT_POWER;
                                 green_vent = true;
                             }
@@ -505,29 +510,32 @@ PROCESS_THREAD(hvac_node_process, ev, data)
                                 float dc_needed_power = VENT_POWER * DC_AC_COEFF;
                                 if (dc_needed_power * GREEN_HOURS <= battery_level) // battery is enough
                                 {
-                                    snprintf(payload, // Ask vent power to energy node
+                                    int snlen = snprintf(payload, // Ask vent power to energy node
                                         COAP_MAX_CHUNK_SIZE,
                                         "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                                         (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(VENT_POWER, buf2));
+                                    payload[snlen] = '\0'; // Ensure null termination
                                         conditioner_power = VENT_POWER;
                                         green_vent = true;
                                 }
                                 else // not enough in any case
                                 {
-                                    snprintf(payload, // Ask vent power to energy node
+                                    int snlen = snprintf(payload, // Ask vent power to energy node
                                         COAP_MAX_CHUNK_SIZE,
                                         "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                                         (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(0.0, buf2));
+                                    payload[snlen] = '\0'; // Ensure null termination
                                         conditioner_power = 0.0;
                                 }
                             }
                         }
                         else // not enough in any case
                         {
-                            snprintf(payload, // Ask vent power to energy node
+                            int snlen = snprintf(payload, // Ask vent power to energy node
                                 COAP_MAX_CHUNK_SIZE,
                                 "n=relay&r_sp=%d&r_h=%d&p_sp=%s&p_h=%s",
                                 (int) RELAY_SP_BATTERY, (int) RELAY_HOME_BATTERY, str(gen_power, buf), str(0.0, buf2));
+                            payload[snlen] = '\0'; // Ensure null termination
                                 conditioner_power = 0.0;
                         }
                     }

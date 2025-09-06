@@ -64,15 +64,15 @@ def print_get_all(data):
     mode = mode_map[data['settings']['mode']]
     BACK = BACKCOLOR_HVAC[status]
     green = f"{BRIGHT_GREEN} green{RESET}" if mode == "green" and status != "off" and status != "error" else ""
-    targetTemp = data['settings']['targetTemp']
-    hvacPower = data['settings']['pw']
+    targetTemp = round(float(data['settings']['targetTemp']), 2)
+    hvacPower = round(float(data['settings']['pw']), 2)
     backPower = RED if hvacPower > 0 else RESET
-    outTemp = data['weather']['outTemp']
+    outTemp = round(float(data['weather']['outTemp']), 2)
     print(f"{BACK}HVAC {status}{RESET} {green}")
     print(f"  Power consumption: {backPower}{hvacPower}W{RESET}")
     print(f"  Target Temperature: {targetTemp}°C \t Outside Temperature: {outTemp}°C")
 
-    roomTemp = data['roomTemp']['v']
+    roomTemp = round(float(data['roomTemp']['v']), 2)
     global lastRoomTemp
     global colorRoomTemp
     if abs(roomTemp - lastRoomTemp) > 0.0:
@@ -82,18 +82,18 @@ def print_get_all(data):
 
     antidust = f"{GREEN}antidust on{RESET}" if data['antiDust']['v'] == 1 else \
                 f"{BACKGROUND_BRIGHT_RED}antidust alarm{RESET}" if data['antiDust']['v'] == 2 else ""
-    modTemp = data['weather']['modTemp']
-    irradiation = data['weather']['irr']
-    genPower = data['gen_power']['v']
+    modTemp = round(float(data['weather']['modTemp']), 2)
+    irradiation = round(float(data['weather']['irr']), 2)
+    genPower = round(float(data['gen_power']['v']), 2)
     print(f"SOLAR PANEL {antidust}")
     print(f"  Module Temperature: {modTemp}°C \t Irradiation: {irradiation}kW/m²")
     print(f"  Generated Power: {genPower}W")
 
     relay_sp = data['relay']['r_sp']
     relay_h = data['relay']['r_h']
-    power_sp = data['relay']['p_sp']
-    power_h = data['relay']['p_h']
-    batteryValue = data['battery']['v']
+    power_sp = round(float(data['relay']['p_sp']), 2)
+    power_h = round(float(data['relay']['p_h']), 2)
+    batteryValue = round(float(data['battery']['v']), 2)
     batteryRate = power_sp * (1 if relay_sp == 1 else 0) - power_h * (1 if relay_h == 1 else 0)
     batteryColor = GREEN if batteryRate > 0 else \
                     RED if batteryRate < 0 else \
